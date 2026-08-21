@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ajanda</title>
+
+<meta name="theme-color" content="#f2f1ed">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Ajanda">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  *{margin:0;padding:0}
+  html,body{background:#f2f1ed;-webkit-tap-highlight-color:transparent}
+  body[data-ui="desktop"]{background:#ece4d6}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#cdbfa8;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- sürüm numarasını her güncellemede artırın: ?v=2, ?v=3 ... (tarayıcı önbelleğini kırar) -->
+<script src="store.js?v=1"></script>
+<script src="desktop.js?v=1"></script>
+<script src="mobile.js?v=1"></script>
+<script src="boot.js?v=1"></script>
+</body>
+</html>
