@@ -104,7 +104,6 @@ body[data-ui="mobile"] #app{
 .mob .tab{flex:1;padding:11px;border-radius:16px;text-align:center;font-size:12.5px;font-weight:700;color:var(--m5)}
 .mob .tab.on{background:var(--ink);color:var(--paper)}
 
-.mob .hint{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--safeB));padding:7px 14px;border-radius:999px;background:rgba(27,26,24,.78);color:var(--paper);font-size:11px;font-weight:600;transition:opacity .4s;pointer-events:none;white-space:nowrap;z-index:20;opacity:0}
 .mob .toast{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--safeB));padding:9px 16px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:12.5px;font-weight:600;z-index:60;white-space:nowrap;animation:mfadein .2s;pointer-events:none}
 
 .mob .scrim{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(27,26,24,.28);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);transition:background .2s}
@@ -205,7 +204,6 @@ body[data-ui="mobile"] #app{
         </div>
       </div>
       <div class="scroll" id="mScroll"></div>
-      <div class="hint" id="mHint"></div>
       <div class="tabs">
         <button class="tab" id="mTabY">Yıl</button>
         <button class="tab" id="mTabM">Ay</button>
@@ -275,7 +273,6 @@ body[data-ui="mobile"] #app{
     else if (V.level === 'ay') sc.appendChild(viewMonth());
     else sc.appendChild(viewWeek());
     sc.scrollTop = 0;
-    showHint(V.level === 'yil' ? 'Aya dokun · aşağı kaydır → ay' : 'Yukarı kaydır → uzaklaş');
   }
 
   function weekNo(dt) {
@@ -505,16 +502,6 @@ body[data-ui="mobile"] #app{
     clearTimeout(toastT);
     toastT = setTimeout(() => host.innerHTML = '', 1900);
   }
-  let hintT = null, hintSeen = +(localStorage.getItem('ajanda_hint') || 0);
-  function showHint(txt) {
-    if (hintSeen > 3) { hideHint(); return; }
-    const el = $('mHint'); el.textContent = txt; el.style.opacity = '1';
-    clearTimeout(hintT);
-    hintT = setTimeout(() => { el.style.opacity = '0'; }, 3800);
-  }
-  function hideHint() { const el = $('mHint'); if (el) el.style.opacity = '0'; clearTimeout(hintT); }
-  function bumpHint() { hintSeen++; try { localStorage.setItem('ajanda_hint', hintSeen); } catch (e) { } hideHint(); }
-
   /* ---------------- kayıt sheet'i ---------------- */
   function openSheet(ev, date) {
     const editing = !!ev;
@@ -558,7 +545,7 @@ body[data-ui="mobile"] #app{
       if (del) del.onclick = () => { S.deleteEvent(ev.id); closeSheet(); render(); toast('Kayıt silindi'); };
     };
     const commit = () => {
-      if (!dr.title.trim()) dr.title = S.cat(dr.cat).name;
+      if (!dr.title.trim()) dr.title = 'Yeni kayıt';
       const payload = { date: dr.date, time: dr.time, text: dr.title.trim(), cat: dr.cat };
       if (editing) S.updateEvent(ev.id, payload); else S.addEvent(payload);
       closeSheet();
@@ -654,49 +641,23 @@ body[data-ui="mobile"] #app{
   }
 
   /* ---------------- jestler ---------------- */
-  let lock = 0, gesturesBound = false;
-  function canZoom() { return !sheetOpen; }
-  function zoomOut() {
-    if (V.level === 'hafta') { V.m = V.week.getMonth(); V.y = V.week.getFullYear(); go('ay', 'zout'); }
-    else if (V.level === 'ay') go('yil', 'zout');
-  }
-  function zoomIn() {
-    if (V.level === 'yil') { V.m = (V.y === TODAY.getFullYear()) ? TODAY.getMonth() : 0; go('ay', 'zin'); }
-    else if (V.level === 'ay') {
-      const inThis = V.y === TODAY.getFullYear() && V.m === TODAY.getMonth();
-      V.week = startOfWeek(inThis ? TODAY : new Date(V.y, V.m, 1)); go('hafta', 'zin');
-    }
-  }
+  let gesturesBound = false;
   function bindGestures() {
     if (gesturesBound) return;
     gesturesBound = true;
     const sc = $('mScroll');
-    sc.addEventListener('wheel', e => {
-      if (!canZoom()) return;
-      const now = Date.now(); if (now - lock < 650) return;
-      if (e.deltaY < -18 && sc.scrollTop <= 2) { lock = now; bumpHint(); zoomOut(); }
-      else if (e.deltaY > 18 && sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 3) { lock = now; bumpHint(); zoomIn(); }
-    }, { passive: true });
 
-    let tY = 0, tActive = false, sx = 0, sy = 0, sw = false;
+    /* yalnızca yatay kaydırma: önceki / sonraki dönem */
+    let sx = 0, sy = 0, sw = false;
     sc.addEventListener('touchstart', e => {
       if (e.touches.length !== 1) return;
-      tY = e.touches[0].clientY; tActive = true;
       sx = e.touches[0].clientX; sy = e.touches[0].clientY; sw = true;
     }, { passive: true });
     sc.addEventListener('touchend', e => {
-      const dx = e.changedTouches[0].clientX - sx, dyH = e.changedTouches[0].clientY - sy;
-      if (sw && !sheetOpen && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dyH) * 1.8) {
-        sw = false; tActive = false; step(dx < 0 ? 1 : -1); return;
-      }
+      if (!sw || sheetOpen) { sw = false; return; }
       sw = false;
-      if (!tActive || !canZoom()) return; tActive = false;
-      const now = Date.now(); if (now - lock < 650) return;
-      const dy = e.changedTouches[0].clientY - tY;
-      const atTop = sc.scrollTop <= 2;
-      const atBot = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 3;
-      if (dy > 90 && atTop) { lock = now; bumpHint(); zoomOut(); }
-      else if (dy < -90 && atBot) { lock = now; bumpHint(); zoomIn(); }
+      const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+      if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) step(dx < 0 ? 1 : -1);
     }, { passive: true });
 
     document.addEventListener('keydown', e => {
@@ -705,8 +666,6 @@ body[data-ui="mobile"] #app{
       if (e.target.matches && e.target.matches('input,select,textarea')) return;
       if (e.key === 'ArrowLeft') step(-1);
       else if (e.key === 'ArrowRight') step(1);
-      else if (e.key === 'ArrowUp') zoomOut();
-      else if (e.key === 'ArrowDown') zoomIn();
       else if (e.key === 'n' || e.key === 'N') $('mAdd').click();
     });
   }
