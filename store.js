@@ -12,26 +12,26 @@ var Store = (function () {
 
   /* ---------- sabitler ---------- */
   const PALETTE = [
-    { id: 'kirmizi', name: 'Kırmızı', color: '#D93B30' },
-    { id: 'turuncu', name: 'Turuncu', color: '#E5813C' },
-    { id: 'kehribar', name: 'Kehribar', color: '#E09A18' },
-    { id: 'sari', name: 'Sarı', color: '#E0B22C' },
-    { id: 'fistik', name: 'Fıstık', color: '#8FA834' },
-    { id: 'yesil', name: 'Yeşil', color: '#4C9E5C' },
-    { id: 'zumrut', name: 'Zümrüt', color: '#2F8F70' },
-    { id: 'turkuaz', name: 'Turkuaz', color: '#1F9E9B' },
-    { id: 'camgobegi', name: 'Camgöbeği', color: '#2E9BC4' },
-    { id: 'mavi', name: 'Mavi', color: '#3B7DC7' },
-    { id: 'lacivert', name: 'Lacivert', color: '#4051A8' },
-    { id: 'mor', name: 'Mor', color: '#8B5FB8' },
-    { id: 'erguvan', name: 'Erguvan', color: '#AE47A0' },
-    { id: 'pembe', name: 'Pembe', color: '#E0568F' },
-    { id: 'bordo', name: 'Bordo', color: '#9C3355' },
-    { id: 'kahve', name: 'Kahve', color: '#8B5A38' },
-    { id: 'kum', name: 'Kum', color: '#B29469' },
-    { id: 'komur', name: 'Kömür', color: '#6E6A66' }
+    { id: 'kirmizi', name: 'Kırmızı', color: '#B65449' },
+    { id: 'turuncu', name: 'Turuncu', color: '#C97F4E' },
+    { id: 'kehribar', name: 'Kehribar', color: '#C1913F' },
+    { id: 'sari', name: 'Sarı', color: '#C2AE58' },
+    { id: 'fistik', name: 'Fıstık', color: '#8C9B57' },
+    { id: 'yesil', name: 'Yeşil', color: '#5F9269' },
+    { id: 'zumrut', name: 'Zümrüt', color: '#4A8A75' },
+    { id: 'turkuaz', name: 'Turkuaz', color: '#4A8E91' },
+    { id: 'camgobegi', name: 'Camgöbeği', color: '#5590AE' },
+    { id: 'mavi', name: 'Mavi', color: '#5F81AC' },
+    { id: 'lacivert', name: 'Lacivert', color: '#5A6493' },
+    { id: 'mor', name: 'Mor', color: '#8672A6' },
+    { id: 'erguvan', name: 'Erguvan', color: '#9A6295' },
+    { id: 'pembe', name: 'Pembe', color: '#C0768F' },
+    { id: 'bordo', name: 'Bordo', color: '#8D5566' },
+    { id: 'kahve', name: 'Kahve', color: '#8A6754' },
+    { id: 'kum', name: 'Kum', color: '#AD9877' },
+    { id: 'komur', name: 'Kömür', color: '#6F6B67' }
   ];
-  const PALETTE_VERSION = 3;
+  const PALETTE_VERSION = 4;
 
   const DEFAULT_HABITS = [
     { id: 'h_spor', name: 'Spor', icon: '🏋️', color: '#E5813C', pinned: true, hidden: false },

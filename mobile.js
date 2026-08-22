@@ -1,16 +1,16 @@
 "use strict";
 /* ===========================================================
    mobile.js — telefon görünümü
-   Tasarım: kullanıcının "Ajanda · P&L" prototipinden birebir
-   (yıl ↔ ay ↔ hafta zoom, aynı tipografi, renk ve bileşenler).
+   Tasarım: kullanıcının "Ajanda" prototipi (yıl ↔ ay ↔ hafta).
    Veri: store.js (bilgisayarla ortak).
    =========================================================== */
 var MobileView = (function () {
   const S = Store;
   const MONTHS = S.MONTHS, SHORT = S.MONTHS_SHORT, DOW = S.WD_SHORT;
-  const INK = '#1b1a18', GREEN = '#2f7a5b', RUST = '#b4622f';
+  const INK = '#1b1a18', GREEN = '#2f7a5b';
+  /* geçmiş günler: renk yerine soluk mürekkep */
+  const PAST_BG = 'rgba(27,26,24,.10)', PAST_FG = 'rgba(27,26,24,.40)', PAST_EMPTY = 'rgba(27,26,24,.22)';
 
-  /* ---------------- stil ---------------- */
   const CSS = `
 body[data-ui="mobile"]{margin:0;background:#eceae5;display:flex;align-items:center;justify-content:center;
   font-family:-apple-system,BlinkMacSystemFont,system-ui,"Segoe UI","Helvetica Neue",sans-serif;
@@ -76,6 +76,7 @@ body[data-ui="mobile"] #app{
 
 .mob .wrap{display:flex;flex-direction:column;gap:14px;min-height:100%}
 .mob .wday{flex:1 0 auto;display:flex;gap:14px}
+.mob .wday.past{opacity:.5}
 .mob .wleft{width:46px;flex:none;text-align:center;padding-top:2px}
 .mob .wdow{font-size:10px;font-weight:600;color:rgba(27,26,24,.38);text-transform:uppercase;letter-spacing:.06em}
 .mob .wnum{margin:3px auto 0;width:30px;height:30px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700}
@@ -85,7 +86,6 @@ body[data-ui="mobile"] #app{
 .mob .ev-c{width:7px;height:7px;border-radius:999px;flex:none}
 .mob .ev-t{font-size:11.5px;font-weight:700;color:var(--m6);width:38px;flex:none}
 .mob .ev-n{flex:1;min-width:0;font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mob .ev-a{font-size:12.5px;font-weight:600}
 .mob .addline{font-size:12.5px;color:rgba(27,26,24,.32);padding:8px 2px;text-align:left}
 
 .mob .sechd{margin-top:22px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
@@ -97,23 +97,7 @@ body[data-ui="mobile"] #app{
 .mob .pttl{font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mob .pwhen{font-size:11.5px;color:var(--m5);margin-top:1px}
 .mob .empty{padding:26px 4px;text-align:center;font-size:13px;color:var(--m5);line-height:1.5}
-
-.mob .hero{background:var(--ink);color:var(--paper);border-radius:24px;padding:20px 20px 18px}
-.mob .hero-l{font-size:11.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:rgba(246,245,242,.5)}
-.mob .hero-big{font-size:32px;font-weight:700;letter-spacing:-.03em;margin-top:6px}
-.mob .hero-g{display:flex;gap:10px;margin-top:18px}
-.mob .hero-g>div{flex:1;background:rgba(246,245,242,.08);border-radius:14px;padding:11px 13px}
-.mob .hero-g .k{font-size:11px;color:rgba(246,245,242,.5);font-weight:600}
-.mob .hero-g .v{font-size:16px;font-weight:700;margin-top:2px}
-.mob .list{margin-top:10px;background:var(--card);border-radius:20px;box-shadow:0 1px 2px rgba(0,0,0,.05);overflow:hidden}
-.mob .li{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid rgba(27,26,24,.06);width:100%;text-align:left}
-.mob .li:last-child{border-bottom:0}
-.mob .li:active{background:#faf9f7}
-.mob .li-d{width:30px;height:30px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
-.mob .li-n{font-size:14px;font-weight:600;letter-spacing:-.01em}
-.mob .li-s{font-size:11.5px;color:var(--m5);margin-top:1px}
-.mob .li-a{font-size:14px;font-weight:600}
-.mob .ghost{margin-top:16px;padding:15px;border-radius:18px;background:var(--m1);text-align:center;font-size:14px;font-weight:600;color:var(--m6);width:100%;display:block}
+.mob .ghost{margin-top:10px;padding:15px;border-radius:18px;background:var(--m1);text-align:center;font-size:14px;font-weight:600;color:var(--m6);width:100%;display:block}
 .mob .ghost:active{background:var(--m2)}
 
 .mob .tabs{position:absolute;left:0;right:0;bottom:0;padding:8px 16px calc(14px + var(--safeB));background:rgba(246,245,242,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgba(27,26,24,.07);display:flex;gap:8px;z-index:30}
@@ -123,7 +107,7 @@ body[data-ui="mobile"] #app{
 .mob .hint{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--safeB));padding:7px 14px;border-radius:999px;background:rgba(27,26,24,.78);color:var(--paper);font-size:11px;font-weight:600;transition:opacity .4s;pointer-events:none;white-space:nowrap;z-index:20;opacity:0}
 .mob .toast{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--safeB));padding:9px 16px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:12.5px;font-weight:600;z-index:60;white-space:nowrap;animation:mfadein .2s;pointer-events:none}
 
-.mob .scrim{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(27,26,24,.28);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.mob .scrim{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(27,26,24,.28);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);transition:background .2s}
 .mob .sheet{background:var(--paper);border-radius:28px 28px 0 0;padding:10px 20px calc(28px + var(--safeB));animation:msheetup .3s cubic-bezier(.2,.8,.2,1);box-shadow:0 -8px 30px rgba(0,0,0,.14);max-height:92%;overflow-y:auto}
 .mob .grab{width:38px;height:5px;border-radius:999px;background:rgba(27,26,24,.18);margin:0 auto 14px}
 .mob .sh-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
@@ -136,13 +120,10 @@ body[data-ui="mobile"] #app{
 .mob .flab{font-size:14px;font-weight:600;color:var(--m5);flex:1;min-width:0}
 .mob .mini{width:86px;text-align:center;border:0;border-radius:10px;background:var(--m1);padding:9px 4px;font-size:15px;font-weight:600;color:var(--ink);outline:none}
 .mob .lab{margin-top:18px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--m4)}
-.mob .seg{margin-top:10px;display:flex;gap:6px;background:var(--m1);padding:4px;border-radius:14px}
-.mob .seg button{flex:1;padding:9px;border-radius:11px;font-size:12.5px;font-weight:700;color:var(--m5)}
-.mob .seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.mob .pal{margin-top:10px;display:grid;grid-template-columns:repeat(6,1fr);gap:12px 10px}
-.mob .pal button{display:flex;flex-direction:column;align-items:center;gap:6px}
-.mob .pal .sw{width:100%;aspect-ratio:1;border-radius:999px}
-.mob .pal .nm{font-size:9.5px;font-weight:600;white-space:nowrap;color:var(--m5)}
+.mob .pal{margin-top:12px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px 6px;justify-items:center}
+.mob .pal button{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;min-width:0}
+.mob .pal .sw{width:42px;height:42px;border-radius:999px;flex:none}
+.mob .pal .nm{font-size:8.8px;letter-spacing:-.1px;font-weight:600;color:var(--m5);width:100%;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mob .pal button.on .nm{color:var(--ink)}
 .mob .pick{margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .mob .pick button{padding:14px 4px;border-radius:14px;background:var(--card);font-size:14px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
@@ -152,7 +133,7 @@ body[data-ui="mobile"] #app{
 .mob .yhead .y{font-size:20px;font-weight:700;min-width:74px;text-align:center}
 .mob .yhead button{width:34px;height:34px;border-radius:999px;background:var(--m1);display:flex;align-items:center;justify-content:center;color:var(--m6)}
 .mob .yhead svg{width:15px;height:15px}
-.mob .save{margin-top:22px;padding:16px;border-radius:18px;text-align:center;font-size:15px;font-weight:700;color:var(--ink);width:100%}
+.mob .save{margin-top:22px;padding:16px;border-radius:18px;text-align:center;font-size:15px;font-weight:700;color:#fff;width:100%}
 .mob .del{margin-top:9px;padding:13px;border-radius:16px;text-align:center;font-size:13px;font-weight:600;color:var(--rust);width:100%;background:rgba(180,98,47,.09)}
 .mob .note{margin-top:9px;text-align:center;font-size:11.5px;color:var(--m4);font-weight:500;line-height:1.45}
 `;
@@ -175,8 +156,8 @@ body[data-ui="mobile"] #app{
   const startOfWeek = dt => addDays(dt, -dowMon(dt));
   const sameDay = (a, b) => dkey(a) === dkey(b);
   const TODAY = new Date();
+  const TKEY = S.todayKey();
   const esc = S.esc;
-  const fmt = S.money;
 
   /* ---------------- veri köprüsü ---------------- */
   function dayEvents(y, m, d) {
@@ -187,25 +168,20 @@ body[data-ui="mobile"] #app{
     return S.data.events.filter(e => e.date.slice(0, 7) === p).length;
   }
   function yearCount(y) { return S.data.events.filter(e => e.date.slice(0, 4) === String(y)).length; }
-  function firstColor(y, m, d) { const e = dayEvents(y, m, d); return e.length ? e[0].color : null; }
-  const amountColor = e => (!e.amt || e.amtType === 'none') ? GREEN : (e.amtType === 'inc' ? GREEN : RUST);
-  const amountLabel = e => (!e.amt || e.amtType === 'none') ? '' : (e.amtType === 'inc' ? '+' : '') + fmt(e.amt);
 
   /* ---------------- görünüm durumu ---------------- */
   let V = null;
-  function loadUI() {
-    let ui = { tab: 'ajanda', level: 'ay' };
-    try { const raw = localStorage.getItem('ajanda_ui_mob'); if (raw) ui = Object.assign(ui, JSON.parse(raw)); } catch (e) { }
-    return ui;
+  function loadLevel() {
+    try { const l = localStorage.getItem('ajanda_level_mob'); if (l === 'yil' || l === 'ay' || l === 'hafta') return l; } catch (e) { }
+    return 'ay';
   }
-  function saveUI() { try { localStorage.setItem('ajanda_ui_mob', JSON.stringify({ tab: V.tab, level: V.level })); } catch (e) { } }
+  function saveLevel() { try { localStorage.setItem('ajanda_level_mob', V.level); } catch (e) { } }
 
   function initState() {
-    const ui = loadUI();
     V = {
-      tab: ui.tab, level: ui.level,
+      level: loadLevel(),
       y: TODAY.getFullYear(), m: TODAY.getMonth(), week: startOfWeek(TODAY),
-      pnlY: TODAY.getFullYear(), pnlM: TODAY.getMonth(), anim: 'zin'
+      anim: 'zin'
     };
   }
 
@@ -224,20 +200,28 @@ body[data-ui="mobile"] #app{
         </div>
         <div class="hbtns">
           <div class="nav" id="mNav"></div>
-          <button class="pill" id="mZoom"></button>
+          <button class="pill" id="mToday">Bugün</button>
           <button class="fab" id="mAdd" aria-label="Yeni kayıt">${SVG.plus}</button>
         </div>
       </div>
       <div class="scroll" id="mScroll"></div>
       <div class="hint" id="mHint"></div>
       <div class="tabs">
-        <button class="tab" id="mTabA">Ajanda</button>
-        <button class="tab" id="mTabP">P&amp;L</button>
+        <button class="tab" id="mTabY">Yıl</button>
+        <button class="tab" id="mTabM">Ay</button>
       </div>
       <div id="mSheetHost"></div>
       <div id="mToastHost"></div>`;
-    $('mTabA').onclick = () => { V.tab = 'ajanda'; render(); };
-    $('mTabP').onclick = () => { V.tab = 'pnl'; render(); };
+    $('mTabY').onclick = () => { if (V.level !== 'yil') go('yil', 'zout'); };
+    $('mTabM').onclick = () => {
+      if (V.level === 'hafta') { V.m = V.week.getMonth(); V.y = V.week.getFullYear(); go('ay', 'zout'); }
+      else if (V.level === 'yil') go('ay', 'zin');
+    };
+    $('mToday').onclick = () => {
+      V.y = TODAY.getFullYear(); V.m = TODAY.getMonth(); V.week = startOfWeek(TODAY);
+      V.anim = 'zin'; render();
+    };
+    $('mAdd').onclick = () => openSheet(null, defaultDate());
     $('mKicker').onclick = openSettings;
     bindGestures();
   }
@@ -252,11 +236,10 @@ body[data-ui="mobile"] #app{
     $('mNav').innerHTML = `<button aria-label="Önceki">${SVG.left}</button><button aria-label="Sonraki">${SVG.right}</button>`;
     const b = $('mNav').querySelectorAll('button');
     b[0].onclick = () => fn(-1); b[1].onclick = () => fn(1);
-    $('mNav').style.display = 'flex';
   }
   function setKicker(text) {
     const st = S.status;
-    const dot = st.kind === 'err' ? RUST : (st.kind === 'sync' ? 'rgba(27,26,24,.3)' : '');
+    const dot = st.kind === 'err' ? '#b4622f' : (st.kind === 'sync' ? 'rgba(27,26,24,.3)' : '');
     $('mKicker').innerHTML = (dot ? `<i style="background:${dot}"></i>` : '') + esc(text);
   }
 
@@ -264,23 +247,10 @@ body[data-ui="mobile"] #app{
   function render() {
     if (!V) initState();
     if (!$('mScroll')) buildShell();
-    saveUI();
-    const isA = V.tab === 'ajanda';
-    $('mTabA').className = 'tab' + (isA ? ' on' : '');
-    $('mTabP').className = 'tab' + (isA ? '' : ' on');
-    isA ? renderAjanda() : renderPnl();
-  }
+    saveLevel();
 
-  function renderAjanda() {
-    const zl = { yil: 'Bugün', ay: 'Yıl', hafta: 'Ay' }[V.level];
-    $('mZoom').textContent = zl;
-    $('mZoom').style.display = '';
-    $('mZoom').onclick = () => {
-      if (V.level === 'hafta') { V.m = V.week.getMonth(); V.y = V.week.getFullYear(); go('ay', 'zout'); }
-      else if (V.level === 'ay') go('yil', 'zout');
-      else { V.y = TODAY.getFullYear(); V.m = TODAY.getMonth(); V.week = startOfWeek(TODAY); go('hafta', 'zin'); }
-    };
-    $('mAdd').onclick = () => openSheet(null, defaultDate());
+    $('mTabY').className = 'tab' + (V.level === 'yil' ? ' on' : '');
+    $('mTabM').className = 'tab' + (V.level !== 'yil' ? ' on' : '');
 
     const wEnd = addDays(V.week, 6);
     const sameM = V.week.getMonth() === wEnd.getMonth();
@@ -289,7 +259,7 @@ body[data-ui="mobile"] #app{
       : `${V.week.getDate()} ${SHORT[V.week.getMonth()]} – ${wEnd.getDate()} ${SHORT[wEnd.getMonth()]}`;
 
     if (V.level === 'yil') setTitle(String(V.y), openYearPick);
-    else if (V.level === 'ay') setTitle(MONTHS[V.m], () => openMonthPick('ajanda'));
+    else if (V.level === 'ay') setTitle(MONTHS[V.m], openMonthPick);
     else setTitle(weekLabel, null);
     $('mTitle').classList.toggle('sm', V.level === 'hafta');
     setKicker({
@@ -313,7 +283,6 @@ body[data-ui="mobile"] #app{
     return Math.floor((startOfWeek(dt) - startOfWeek(t)) / 604800000) + 1;
   }
   function step(n) {
-    if (V.tab === 'pnl') { const d = new Date(V.pnlY, V.pnlM + n, 1); V.pnlY = d.getFullYear(); V.pnlM = d.getMonth(); render(); return; }
     if (V.level === 'yil') V.y += n;
     else if (V.level === 'ay') { const d = new Date(V.y, V.m + n, 1); V.y = d.getFullYear(); V.m = d.getMonth(); }
     else V.week = addDays(V.week, 7 * n);
@@ -321,7 +290,6 @@ body[data-ui="mobile"] #app{
   }
   function go(level, anim) { V.level = level; V.anim = anim || 'zin'; render(); }
   function defaultDate() {
-    if (V.tab === 'pnl') return (V.pnlY === TODAY.getFullYear() && V.pnlM === TODAY.getMonth()) ? dkey(TODAY) : iso(V.pnlY, V.pnlM, 1);
     if (V.level === 'hafta') return dkey(V.week <= TODAY && TODAY <= addDays(V.week, 6) ? TODAY : V.week);
     if (V.level === 'ay') return (V.y === TODAY.getFullYear() && V.m === TODAY.getMonth()) ? dkey(TODAY) : iso(V.y, V.m, 1);
     return dkey(TODAY);
@@ -331,22 +299,34 @@ body[data-ui="mobile"] #app{
   function viewYear() {
     const wrap = document.createElement('div');
     wrap.className = 'year ' + V.anim;
+    const todayD = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
     for (let m = 0; m < 12; m++) {
       const isCur = V.y === TODAY.getFullYear() && m === TODAY.getMonth();
+      const monthPast = new Date(V.y, m + 1, 0) < todayD;
       const el = document.createElement('div'); el.className = 'ymo';
       let cells = '';
       for (let i = 0; i < firstDow(V.y, m); i++) cells += '<div class="ycell"></div>';
       for (let d = 1; d <= daysIn(V.y, m); d++) {
-        const today = isCur && d === TODAY.getDate();
-        const c = firstColor(V.y, m, d);
-        const color = c ? '#fff' : (today ? '#f6f5f2' : 'rgba(27,26,24,.42)');
-        const bg = c ? c : (today ? INK : 'transparent');
-        const w = (c || today) ? 700 : 400;
-        const ring = (today && c) ? 'box-shadow:inset 0 0 0 1.5px ' + INK + ';' : '';
+        const k = iso(V.y, m, d);
+        const today = k === TKEY, past = k < TKEY;
+        const evs = dayEvents(V.y, m, d);
+        let bg = 'transparent', color = 'rgba(27,26,24,.42)', w = 400, ring = '';
+        if (past) {
+          color = evs.length ? PAST_FG : PAST_EMPTY;
+          bg = evs.length ? PAST_BG : 'transparent';
+          w = evs.length ? 600 : 400;
+        } else if (evs.length) {
+          bg = evs[0].color; color = '#fff'; w = 700;
+        }
+        if (today) {
+          color = '#fff'; w = 700;
+          bg = evs.length ? evs[0].color : INK;
+          if (evs.length) ring = 'box-shadow:inset 0 0 0 1.5px ' + INK + ';';
+        }
         cells += `<div class="ycell" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>`;
       }
       el.innerHTML = `<div class="ymo-h">
-          <div class="ymo-n" style="color:${isCur ? GREEN : INK}">${MONTHS[m]}</div>
+          <div class="ymo-n" style="color:${isCur ? GREEN : (monthPast ? 'rgba(27,26,24,.34)' : INK)}">${MONTHS[m]}</div>
           <div class="ymo-c">${monthCount(V.y, m) || ''}</div>
         </div><div class="ycells">${cells}</div>`;
       el.onclick = () => { V.m = m; go('ay', 'zin'); };
@@ -374,14 +354,25 @@ body[data-ui="mobile"] #app{
       row.style.background = hasToday ? 'rgba(47,122,91,.08)' : 'transparent';
       row.innerHTML = slice.map(d => {
         if (!d) return '<div class="mcell"></div>';
-        const today = isCur && d === TODAY.getDate();
+        const k = iso(V.y, V.m, d);
+        const today = k === TKEY, past = k < TKEY;
         const evs = dayEvents(V.y, V.m, d);
-        const c = evs.length ? evs[0].color : null;
-        const color = c ? '#fff' : (today ? '#f6f5f2' : 'rgba(27,26,24,.85)');
-        const bg = c ? c : (today ? GREEN : 'transparent');
-        const w = (c || today) ? 700 : 500;
-        const ring = (today && c) ? `box-shadow:inset 0 0 0 2px ${GREEN};` : '';
-        const dots = evs.slice(1, 4).map(e => `<div class="mdot" style="background:${e.color}"></div>`).join('');
+        let bg = 'transparent', color = 'rgba(27,26,24,.85)', w = 500, ring = '';
+        let dotCols = evs.slice(1, 4).map(e => e.color);
+        if (past) {
+          color = evs.length ? PAST_FG : PAST_EMPTY;
+          bg = evs.length ? PAST_BG : 'transparent';
+          w = evs.length ? 600 : 500;
+          dotCols = dotCols.map(() => 'rgba(27,26,24,.18)');
+        } else if (evs.length) {
+          bg = evs[0].color; color = '#fff'; w = 700;
+        }
+        if (today) {
+          color = '#fff'; w = 700;
+          bg = evs.length ? evs[0].color : GREEN;
+          if (evs.length) ring = `box-shadow:inset 0 0 0 2px ${GREEN};`;
+        }
+        const dots = dotCols.map(c => `<div class="mdot" style="background:${c}"></div>`).join('');
         return `<div class="mcell">
           <div class="mnum" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>
           <div class="mdots">${dots}</div></div>`;
@@ -405,8 +396,7 @@ body[data-ui="mobile"] #app{
         const when = (sameDay(dt, TODAY) ? 'Bugün' : sameDay(dt, addDays(TODAY, 1)) ? 'Yarın' : `${dt.getDate()} ${SHORT[dt.getMonth()]} ${DOW[dowMon(dt)]}`) + (e.time ? ' · ' + e.time : '');
         const b = document.createElement('button'); b.className = 'pcard';
         b.innerHTML = `<div class="pbar" style="background:${e.color}"></div>
-          <div style="flex:1;min-width:0"><div class="pttl">${esc(e.text)}</div><div class="pwhen">${when}</div></div>
-          <div class="tnum" style="font-size:13px;font-weight:600;color:${amountColor(e)}">${amountLabel(e)}</div>`;
+          <div style="flex:1;min-width:0"><div class="pttl">${esc(e.text)}</div><div class="pwhen">${when}</div></div>`;
         b.onclick = () => openSheet(e, e.date);
         list.appendChild(b);
       });
@@ -429,9 +419,10 @@ body[data-ui="mobile"] #app{
     wrap.className = 'wrap ' + V.anim;
     for (let i = 0; i < 7; i++) {
       const dt = addDays(V.week, i);
+      const k = dkey(dt);
       const evs = dayEvents(dt.getFullYear(), dt.getMonth(), dt.getDate());
-      const today = sameDay(dt, TODAY);
-      const day = document.createElement('div'); day.className = 'wday';
+      const today = k === TKEY, past = k < TKEY;
+      const day = document.createElement('div'); day.className = 'wday' + (past ? ' past' : '');
       day.innerHTML = `<div class="wleft">
           <div class="wdow">${DOW[i]}</div>
           <div class="wnum" style="color:${today ? '#f6f5f2' : INK};background:${today ? GREEN : 'transparent'}">${dt.getDate()}</div>
@@ -439,76 +430,19 @@ body[data-ui="mobile"] #app{
       const right = day.querySelector('.wright');
       evs.forEach(e => {
         const b = document.createElement('button'); b.className = 'ev';
-        b.innerHTML = `<div class="ev-c" style="background:${e.color}"></div>
+        b.innerHTML = `<div class="ev-c" style="background:${past ? 'rgba(27,26,24,.28)' : e.color}"></div>
           <div class="ev-t tnum">${esc(e.time || '—')}</div>
-          <div class="ev-n">${esc(e.text)}</div>
-          <div class="ev-a tnum" style="color:${amountColor(e)}">${amountLabel(e)}</div>`;
+          <div class="ev-n">${esc(e.text)}</div>`;
         b.onclick = () => openSheet(e, e.date);
         right.appendChild(b);
       });
       const add = document.createElement('button'); add.className = 'addline';
       add.textContent = '+ ekle';
-      add.onclick = () => openSheet(null, dkey(dt));
+      add.onclick = () => openSheet(null, k);
       right.appendChild(add);
       wrap.appendChild(day);
     }
     return wrap;
-  }
-
-  /* ---------------- P&L ---------------- */
-  function renderPnl() {
-    const y = V.pnlY, m = V.pnlM;
-    const inMonth = e => e.date.slice(0, 7) === y + '-' + pad(m + 1);
-    const t = S.totals(inMonth);
-    const yt = S.totals(e => e.date.slice(0, 4) === String(y));
-    const list = S.data.events.filter(e => (e.amtType === 'inc' || e.amtType === 'exp') && inMonth(e))
-      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
-
-    setTitle(MONTHS[m], () => openMonthPick('pnl'));
-    $('mTitle').classList.remove('sm');
-    setKicker(`${y} · ${list.length} hareket`);
-    $('mZoom').style.display = 'none';
-    navPair(step);
-    $('mAdd').onclick = () => openSheet(null, defaultDate(), 'exp');
-
-    const sc = $('mScroll');
-    sc.innerHTML = '';
-    const box = document.createElement('div'); box.className = 'zin';
-    box.innerHTML = `
-      <div class="hero">
-        <div class="hero-l">${MONTHS[m]} · net</div>
-        <div class="hero-big tnum">${fmt(t.net)}</div>
-        <div class="hero-g">
-          <div><div class="k">Gelir</div><div class="v tnum">${fmt(t.inc)}</div></div>
-          <div><div class="k">Gider</div><div class="v tnum">${fmt(t.exp)}</div></div>
-        </div>
-      </div>
-      <div class="sechd"><div class="t">Hareketler</div><div class="a">${y} net · ${fmt(yt.net)}</div></div>`;
-    sc.appendChild(box);
-
-    if (!list.length) {
-      sc.appendChild(h('<div class="empty">Bu ayda tutarlı kayıt yok.<br>Kayıt eklerken “Tutar” alanından Gider ya da Gelir seç.</div>'));
-    } else {
-      const ul = document.createElement('div'); ul.className = 'list';
-      list.forEach(e => {
-        const c = S.cat(e.cat).color;
-        const dt = parseISO(e.date);
-        const b = document.createElement('button'); b.className = 'li';
-        b.innerHTML = `<div class="li-d" style="background:${c}">${dt.getDate()}</div>
-          <div style="flex:1;min-width:0"><div class="li-n">${esc(e.text)}</div>
-          <div class="li-s">${SHORT[dt.getMonth()]} · ${esc(e.time || '—')}</div></div>
-          <div class="li-a tnum" style="color:${amountColor(e)}">${amountLabel(e)}</div>`;
-        b.onclick = () => openSheet(Object.assign({}, e, { color: c }), e.date);
-        ul.appendChild(b);
-      });
-      sc.appendChild(ul);
-    }
-    const g = document.createElement('button'); g.className = 'ghost';
-    g.textContent = 'Ayarlar ve eşitleme';
-    g.onclick = openSettings;
-    sc.appendChild(g);
-    sc.scrollTop = 0;
-    hideHint();
   }
 
   /* ---------------- sheet altyapısı ---------------- */
@@ -524,8 +458,46 @@ body[data-ui="mobile"] #app{
     s.appendChild(inner);
     scrim.appendChild(sp); scrim.appendChild(s);
     host.appendChild(scrim);
+    enableDrag(s, scrim);
     return s;
   }
+
+  /* aşağı sürükleyince kapansın */
+  function enableDrag(s, scrim) {
+    let y0 = 0, cur = 0, on = false;
+    const start = e => {
+      if (s.scrollTop > 0) return;
+      const t = e.touches ? e.touches[0] : e;
+      if (e.target.closest && e.target.closest('input,textarea,select')) return;
+      y0 = t.clientY; cur = 0; on = true; s.style.transition = 'none';
+    };
+    const move = e => {
+      if (!on) return;
+      const t = e.touches ? e.touches[0] : e;
+      const d = t.clientY - y0;
+      if (d <= 0) { cur = 0; s.style.transform = ''; scrim.style.background = ''; return; }
+      cur = d;
+      s.style.transform = 'translateY(' + d + 'px)';
+      scrim.style.background = 'rgba(27,26,24,' + Math.max(.06, .28 - d / 1400) + ')';
+    };
+    const end = () => {
+      if (!on) return; on = false;
+      s.style.transition = 'transform .24s cubic-bezier(.2,.8,.2,1)';
+      if (cur > 100) { s.style.transform = 'translateY(100%)'; scrim.style.background = 'rgba(27,26,24,0)'; setTimeout(closeSheet, 190); }
+      else { s.style.transform = ''; scrim.style.background = ''; }
+    };
+    s.addEventListener('touchstart', start, { passive: true });
+    s.addEventListener('touchmove', move, { passive: true });
+    s.addEventListener('touchend', end, { passive: true });
+    s.addEventListener('touchcancel', end, { passive: true });
+    s.addEventListener('mousedown', e => {
+      start(e);
+      const mm = ev => move(ev);
+      const mu = () => { end(); document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
+      document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu);
+    });
+  }
+
   let toastT = null;
   function toast(msg) {
     const host = $('mToastHost');
@@ -544,14 +516,12 @@ body[data-ui="mobile"] #app{
   function bumpHint() { hintSeen++; try { localStorage.setItem('ajanda_hint', hintSeen); } catch (e) { } hideHint(); }
 
   /* ---------------- kayıt sheet'i ---------------- */
-  function openSheet(ev, date, forceKind) {
+  function openSheet(ev, date) {
     const editing = !!ev;
     let dr = {
       title: ev ? ev.text : '',
       date: ev ? ev.date : date,
       time: ev ? (ev.time || '10:00') : '10:00',
-      amount: ev && ev.amt ? String(ev.amt) : '',
-      kind: ev ? (ev.amtType || 'none') : (forceKind || 'none'),
       cat: ev ? ev.cat : 'mavi'
     };
     const box = document.createElement('div');
@@ -568,18 +538,6 @@ body[data-ui="mobile"] #app{
           <input class="mini tnum" id="fTime" type="time" value="${dr.time}">
         </div>
       </div>
-      <div class="lab">Tutar</div>
-      <div class="seg" id="fKind">
-        <button data-k="none" class="${dr.kind === 'none' ? 'on' : ''}">Yok</button>
-        <button data-k="exp" class="${dr.kind === 'exp' ? 'on' : ''}">Gider</button>
-        <button data-k="inc" class="${dr.kind === 'inc' ? 'on' : ''}">Gelir</button>
-      </div>
-      <div class="field" style="${dr.kind === 'none' ? 'display:none' : ''}">
-        <div class="frow">
-          <input class="inp" id="fAmount" inputmode="decimal" placeholder="0" value="${S.escAttr(dr.amount)}" style="flex:1;font-size:20px">
-          <span style="font-size:16px;font-weight:700;color:var(--m5)">€</span>
-        </div>
-      </div>
       <div class="lab">Renk</div>
       <div class="pal" id="fPal">${S.data.cats.map(c => `<button data-c="${c.id}" class="${c.id === dr.cat ? 'on' : ''}">
           <div class="sw" style="background:${c.color};box-shadow:${c.id === dr.cat ? '0 0 0 2.5px ' + INK : 'inset 0 0 0 1px rgba(27,26,24,.08)'}"></div>
@@ -592,11 +550,8 @@ body[data-ui="mobile"] #app{
       const grab = () => {
         dr.title = box.querySelector('#fTitle').value;
         dr.date = box.querySelector('#fDate').value || dr.date;
-        dr.time = box.querySelector('#fTime').value || '10:00';
-        const a = box.querySelector('#fAmount');
-        if (a) dr.amount = a.value;
+        dr.time = box.querySelector('#fTime').value || '';
       };
-      box.querySelector('#fKind').querySelectorAll('button').forEach(b => b.onclick = () => { grab(); dr.kind = b.dataset.k; draw(); });
       box.querySelector('#fPal').querySelectorAll('button').forEach(b => b.onclick = () => { grab(); dr.cat = b.dataset.c; draw(); });
       box.querySelector('#fSave').onclick = () => { grab(); commit(); };
       const del = box.querySelector('#fDel');
@@ -604,27 +559,17 @@ body[data-ui="mobile"] #app{
     };
     const commit = () => {
       if (!dr.title.trim()) dr.title = S.cat(dr.cat).name;
-      const payload = {
-        date: dr.date, time: dr.time, text: dr.title.trim(), cat: dr.cat,
-        amtType: dr.kind, amt: dr.kind === 'none' ? 0 : parseAmount(dr.amount)
-      };
+      const payload = { date: dr.date, time: dr.time, text: dr.title.trim(), cat: dr.cat };
       if (editing) S.updateEvent(ev.id, payload); else S.addEvent(payload);
       closeSheet();
       const dt = parseISO(dr.date);
-      if (V.tab === 'ajanda') {
-        V.y = dt.getFullYear();
-        if (V.level === 'hafta') V.week = startOfWeek(dt); else V.m = dt.getMonth();
-      } else { V.pnlY = dt.getFullYear(); V.pnlM = dt.getMonth(); }
+      V.y = dt.getFullYear();
+      if (V.level === 'hafta') V.week = startOfWeek(dt); else V.m = dt.getMonth();
       render(); toast(editing ? 'Güncellendi' : 'Eklendi');
     };
     draw();
     sheet(box);
     setTimeout(() => { const t = box.querySelector('#fTitle'); if (t && !editing) t.focus(); }, 280);
-  }
-  function parseAmount(s) {
-    if (!s) return 0;
-    const n = parseFloat(String(s).replace(/\s|€/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.'));
-    return isNaN(n) ? 0 : Math.abs(n);
   }
 
   /* ---------------- yıl / ay seçici ---------------- */
@@ -642,12 +587,10 @@ body[data-ui="mobile"] #app{
     });
     sheet(box);
   }
-  function openMonthPick(which) {
+  function openMonthPick() {
     const box = document.createElement('div');
-    let year = which === 'pnl' ? V.pnlY : V.y;
+    let year = V.y;
     const draw = () => {
-      const selM = which === 'pnl' ? V.pnlM : V.m;
-      const selY = which === 'pnl' ? V.pnlY : V.y;
       box.innerHTML = `<div class="grab"></div>
         <div class="sh-h"><div class="sh-t">Ay seç</div><button class="sh-x">Vazgeç</button></div>
         <div class="yhead">
@@ -656,7 +599,7 @@ body[data-ui="mobile"] #app{
           <button id="yNext">${SVG.right}</button>
         </div>
         <div class="pick">${MONTHS.map((n, i) => {
-        const on = (i === selM && year === selY);
+        const on = (i === V.m && year === V.y);
         const now = (i === TODAY.getMonth() && year === TODAY.getFullYear());
         return `<button data-m="${i}" class="${on ? 'on' : ''} ${now ? 'now' : ''}">${SHORT[i]}</button>`;
       }).join('')}</div>
@@ -665,9 +608,7 @@ body[data-ui="mobile"] #app{
       box.querySelector('#yPrev').onclick = () => { year--; draw(); };
       box.querySelector('#yNext').onclick = () => { year++; draw(); };
       box.querySelectorAll('.pick button').forEach(b => b.onclick = () => {
-        const m = +b.dataset.m;
-        if (which === 'pnl') { V.pnlY = year; V.pnlM = m; }
-        else { V.y = year; V.m = m; V.level = 'ay'; V.anim = 'zin'; }
+        V.y = year; V.m = +b.dataset.m; V.level = 'ay'; V.anim = 'zin';
         closeSheet(); render();
       });
     };
@@ -687,7 +628,7 @@ body[data-ui="mobile"] #app{
           <div class="div"></div>
           <input class="inp" id="sGist" autocomplete="off" placeholder="Gist ID" value="${S.escAttr(c.gist)}">
         </div>
-        <button class="save" id="sSave" style="background:${GREEN};color:#fff">Kaydet ve eşitle</button>
+        <button class="save" id="sSave" style="background:${GREEN}">Kaydet ve eşitle</button>
         <div class="note">${esc(st.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
         <div class="lab">Yedek</div>
         <button class="ghost" id="sExp">Yedeği indir</button>
@@ -714,7 +655,7 @@ body[data-ui="mobile"] #app{
 
   /* ---------------- jestler ---------------- */
   let lock = 0, gesturesBound = false;
-  function canZoom() { return V.tab === 'ajanda' && !sheetOpen; }
+  function canZoom() { return !sheetOpen; }
   function zoomOut() {
     if (V.level === 'hafta') { V.m = V.week.getMonth(); V.y = V.week.getFullYear(); go('ay', 'zout'); }
     else if (V.level === 'ay') go('yil', 'zout');
