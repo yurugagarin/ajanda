@@ -2,10 +2,10 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>Ajanda</title>
 
-<meta name="theme-color" content="#f2f1ed">
+<meta name="theme-color" content="#f6f5f2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -20,8 +20,9 @@
 
 <style>
   *{margin:0;padding:0}
-  html,body{background:#f2f1ed;-webkit-tap-highlight-color:transparent}
-  body[data-ui="desktop"]{background:#ece4d6}
+  html,body{height:100%;background:#eceae5;-webkit-tap-highlight-color:transparent}
+  body[data-ui="mobile"]{overflow:hidden}
+  body[data-ui="desktop"]{height:auto;background:#ece4d6;overflow:auto}
   ::-webkit-scrollbar{width:10px;height:10px}
   ::-webkit-scrollbar-thumb{background:#cdbfa8;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
 </style>
@@ -30,9 +31,9 @@
 <div id="app"></div>
 
 <!-- sürüm numarasını her güncellemede artırın: ?v=2, ?v=3 ... (tarayıcı önbelleğini kırar) -->
-<script src="store.js?v=1"></script>
-<script src="desktop.js?v=1"></script>
-<script src="mobile.js?v=1"></script>
-<script src="boot.js?v=1"></script>
+<script src="store.js?v=2"></script>
+<script src="desktop.js?v=2"></script>
+<script src="mobile.js?v=2"></script>
+<script src="boot.js?v=2"></script>
 </body>
 </html>

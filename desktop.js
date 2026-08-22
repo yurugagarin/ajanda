@@ -454,6 +454,7 @@ var DesktopView = (function () {
       document.head.appendChild(s);
     }
     if (!V) init();
+    document.getElementById('app').className = '';
     window.DV = DV;
     render();
   }

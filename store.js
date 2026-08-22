@@ -12,32 +12,33 @@ var Store = (function () {
 
   /* ---------- sabitler ---------- */
   const PALETTE = [
-    { id: 'kirmizi', name: 'Kırmızı', color: '#c0392f' },
-    { id: 'turuncu', name: 'Turuncu', color: '#dd7a3f' },
-    { id: 'kehribar', name: 'Kehribar', color: '#d99b28' },
-    { id: 'sari', name: 'Sarı', color: '#d9bf3a' },
-    { id: 'fistik', name: 'Fıstık', color: '#8aae4a' },
-    { id: 'yesil', name: 'Yeşil', color: '#4aa060' },
-    { id: 'zumrut', name: 'Zümrüt', color: '#2f9276' },
-    { id: 'turkuaz', name: 'Turkuaz', color: '#2a9aa0' },
-    { id: 'camgobegi', name: 'Camgöbeği', color: '#3f9fd0' },
-    { id: 'mavi', name: 'Mavi', color: '#4a7fc1' },
-    { id: 'lacivert', name: 'Lacivert', color: '#3c4f9e' },
-    { id: 'mor', name: 'Mor', color: '#8f5fc0' },
-    { id: 'erguvan', name: 'Erguvan', color: '#b348b3' },
-    { id: 'pembe', name: 'Pembe', color: '#e0578f' },
-    { id: 'bordo', name: 'Bordo', color: '#8e2a4a' },
-    { id: 'kahve', name: 'Kahve', color: '#8a5a3c' },
-    { id: 'kum', name: 'Kum', color: '#c4a678' },
-    { id: 'komur', name: 'Kömür', color: '#5a5a5a' }
+    { id: 'kirmizi', name: 'Kırmızı', color: '#D93B30' },
+    { id: 'turuncu', name: 'Turuncu', color: '#E5813C' },
+    { id: 'kehribar', name: 'Kehribar', color: '#E09A18' },
+    { id: 'sari', name: 'Sarı', color: '#E0B22C' },
+    { id: 'fistik', name: 'Fıstık', color: '#8FA834' },
+    { id: 'yesil', name: 'Yeşil', color: '#4C9E5C' },
+    { id: 'zumrut', name: 'Zümrüt', color: '#2F8F70' },
+    { id: 'turkuaz', name: 'Turkuaz', color: '#1F9E9B' },
+    { id: 'camgobegi', name: 'Camgöbeği', color: '#2E9BC4' },
+    { id: 'mavi', name: 'Mavi', color: '#3B7DC7' },
+    { id: 'lacivert', name: 'Lacivert', color: '#4051A8' },
+    { id: 'mor', name: 'Mor', color: '#8B5FB8' },
+    { id: 'erguvan', name: 'Erguvan', color: '#AE47A0' },
+    { id: 'pembe', name: 'Pembe', color: '#E0568F' },
+    { id: 'bordo', name: 'Bordo', color: '#9C3355' },
+    { id: 'kahve', name: 'Kahve', color: '#8B5A38' },
+    { id: 'kum', name: 'Kum', color: '#B29469' },
+    { id: 'komur', name: 'Kömür', color: '#6E6A66' }
   ];
+  const PALETTE_VERSION = 3;
 
   const DEFAULT_HABITS = [
-    { id: 'h_spor', name: 'Spor', icon: '🏋️', color: '#dd7a3f', pinned: true, hidden: false },
-    { id: 'h_yuruyus', name: 'Yürüyüş', icon: '🚶', color: '#8aae4a', pinned: true, hidden: false },
-    { id: 'h_yemek', name: 'Yemek yapmak', icon: '🍳', color: '#d9bf3a', pinned: true, hidden: false },
-    { id: 'h_yuzme', name: 'Yüzme', icon: '🏊', color: '#3f9fd0', pinned: true, hidden: false },
-    { id: 'h_okuma', name: 'Okuma', icon: '📖', color: '#4a7fc1', pinned: true, hidden: false }
+    { id: 'h_spor', name: 'Spor', icon: '🏋️', color: '#E5813C', pinned: true, hidden: false },
+    { id: 'h_yuruyus', name: 'Yürüyüş', icon: '🚶', color: '#8FA834', pinned: true, hidden: false },
+    { id: 'h_yemek', name: 'Yemek yapmak', icon: '🍳', color: '#E0B22C', pinned: true, hidden: false },
+    { id: 'h_yuzme', name: 'Yüzme', icon: '🏊', color: '#2E9BC4', pinned: true, hidden: false },
+    { id: 'h_okuma', name: 'Okuma', icon: '📖', color: '#3B7DC7', pinned: true, hidden: false }
   ];
 
   const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
@@ -59,12 +60,17 @@ var Store = (function () {
   const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const escAttr = s => esc(s).replace(/'/g, '&#39;');
   function rgba(hex, a) { const h = String(hex || '#888').replace('#', ''); return 'rgba(' + parseInt(h.slice(0, 2), 16) + ',' + parseInt(h.slice(2, 4), 16) + ',' + parseInt(h.slice(4, 6), 16) + ',' + a + ')'; }
-  function money(v) { const n = Number(v) || 0; return n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+  function money(v) {
+    const n = Number(v) || 0;
+    const a = Math.round(Math.abs(n) * 100) / 100;
+    const s = a.toLocaleString('tr-TR', { minimumFractionDigits: a % 1 ? 2 : 0, maximumFractionDigits: 2 });
+    return (n < 0 ? '-' : '') + s + ' €';
+  }
 
   /* ---------- boş veri ---------- */
   function blank() {
     return {
-      v: 3,
+      v: 3, pv: PALETTE_VERSION,
       cats: PALETTE.map((p, i) => ({ id: p.id, name: p.name, color: p.color, o: i, mt: 0 })),
       events: [],
       habits: DEFAULT_HABITS.map(h => Object.assign({}, h)),
@@ -132,6 +138,12 @@ var Store = (function () {
     // eksik palet renklerini tamamla
     const has = {}; D.cats.forEach(c => has[c.id] = 1);
     PALETTE.forEach((p, i) => { if (!has[p.id]) D.cats.push({ id: p.id, name: p.name, color: p.color, o: i, mt: 0 }); });
+    // palet sürümü: renk tonları güncellendiyse adları koruyup renkleri yenile
+    if (D.pv !== PALETTE_VERSION) {
+      const pm = {}; PALETTE.forEach(p => pm[p.id] = p.color);
+      D.cats = D.cats.map(c => pm[c.id] ? Object.assign({}, c, { color: pm[c.id] }) : c);
+      D.pv = PALETTE_VERSION;
+    }
     return D;
   }
 

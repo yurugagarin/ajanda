@@ -1,451 +1,788 @@
 "use strict";
 /* ===========================================================
-   mobile.js — telefon görünümü (ekrana eklenen sürüm)
-   Tasarım: gönderilen ekran görüntüleri esas alınmıştır.
+   mobile.js — telefon görünümü
+   Tasarım: kullanıcının "Ajanda · P&L" prototipinden birebir
+   (yıl ↔ ay ↔ hafta zoom, aynı tipografi, renk ve bileşenler).
+   Veri: store.js (bilgisayarla ortak).
    =========================================================== */
 var MobileView = (function () {
   const S = Store;
+  const MONTHS = S.MONTHS, SHORT = S.MONTHS_SHORT, DOW = S.WD_SHORT;
+  const INK = '#1b1a18', GREEN = '#2f7a5b', RUST = '#b4622f';
 
+  /* ---------------- stil ---------------- */
   const CSS = `
-  .m-app{--bg:#f2f1ed;--card:#fff;--ink:#16181a;--mut:#8b8b90;--line:#e4e2db;--green:#2f6b4f;--band:#e7ebe4;
-    background:var(--bg);color:var(--ink);min-height:100vh;
-    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',system-ui,sans-serif;
-    -webkit-font-smoothing:antialiased;padding:14px 16px 108px;max-width:560px;margin:0 auto}
-  .m-app *{box-sizing:border-box}
-  .m-eyebrow{font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;color:#a9a8a2;font-weight:600}
-  .m-eyebrow button{all:unset;cursor:pointer;letter-spacing:inherit}
-  .m-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 16px}
-  .m-title{font-size:30px;font-weight:700;letter-spacing:-.6px;line-height:1.1;display:flex;align-items:center;gap:5px;background:none;border:0;padding:0;color:inherit;font-family:inherit}
-  .m-title small{font-size:13px;color:var(--mut);font-weight:500}
-  .m-title.now{color:var(--green)}
-  .m-ctrls{display:flex;align-items:center;gap:8px}
-  .m-pill{display:flex;align-items:center;background:#e8e6e0;border-radius:999px;overflow:hidden}
-  .m-pill button{all:unset;cursor:pointer;padding:8px 12px;font-size:15px;color:#4a4a4c;line-height:1}
-  .m-btn{all:unset;cursor:pointer;background:#e8e6e0;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:600;color:#4a4a4c}
-  .m-add{all:unset;cursor:pointer;width:38px;height:38px;border-radius:50%;background:var(--green);color:#fff;font-size:22px;font-weight:300;display:flex;align-items:center;justify-content:center;line-height:1}
-  .m-wd{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:6px}
-  .m-wd span{text-align:center;font-size:11.5px;color:#a9a8a2;font-weight:500}
-  .m-week{display:grid;grid-template-columns:repeat(7,1fr);border-radius:12px}
-  .m-week.now{background:var(--band)}
-  .m-cell{all:unset;cursor:pointer;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-  .m-num{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
-  .m-num.ev{color:#fff;font-weight:600}
-  .m-num.today{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px #16181a}
-  .m-week.now .m-num.today{box-shadow:0 0 0 2px var(--band),0 0 0 3.5px #16181a}
-  .m-dot{width:4px;height:4px;border-radius:50%}
-  .m-sec{display:flex;align-items:baseline;justify-content:space-between;margin:22px 0 10px}
-  .m-sec h3{font-size:15px;font-weight:700;margin:0}
-  .m-sec button{all:unset;cursor:pointer;font-size:13.5px;color:var(--green);font-weight:600}
-  .m-list{display:flex;flex-direction:column;gap:8px}
-  .m-row{display:flex;align-items:stretch;gap:11px;background:var(--card);border-radius:12px;padding:12px 13px;cursor:pointer}
-  .m-bar{width:3px;border-radius:3px;flex:none}
-  .m-row h4{margin:0;font-size:15px;font-weight:600;line-height:1.25;word-break:break-word;white-space:pre-line}
-  .m-row p{margin:3px 0 0;font-size:12.5px;color:var(--mut)}
-  .m-amt{font-size:14px;font-weight:600;align-self:center;white-space:nowrap}
-  .m-empty{background:var(--card);border-radius:12px;padding:22px;text-align:center;color:var(--mut);font-size:13.5px}
-  .m-mini{display:grid;grid-template-columns:repeat(3,1fr);gap:18px 12px}
-  .m-mini h4{margin:0 0 7px;font-size:15px;font-weight:700}
-  .m-mini h4.now{color:var(--green)}
-  .m-mini h4 span{font-size:11px;color:var(--mut);font-weight:500;margin-left:3px}
-  .m-mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px}
-  .m-md{height:15px;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#a9a8a2;font-variant-numeric:tabular-nums}
-  .m-md i{width:13px;height:13px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-style:normal;color:#fff;font-size:8.5px;font-weight:600}
-  .m-md i.ring{box-shadow:0 0 0 1px var(--bg),0 0 0 2px #16181a}
-  .m-nav{position:fixed;left:0;right:0;bottom:0;background:rgba(242,241,237,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);
-    padding:8px 16px calc(8px + env(safe-area-inset-bottom));display:flex;gap:10px;justify-content:center;z-index:20}
-  .m-nav button{all:unset;cursor:pointer;flex:1;max-width:220px;text-align:center;padding:12px;border-radius:999px;font-size:14.5px;font-weight:600;color:var(--mut)}
-  .m-nav button.on{background:var(--ink);color:#fff}
-  .m-back{position:fixed;inset:0;background:rgba(20,20,20,.32);z-index:30;animation:mfade .18s ease}
-  .m-sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;background:#f6f5f1;border-radius:22px 22px 0 0;
-    padding:10px 18px calc(18px + env(safe-area-inset-bottom));max-height:92vh;overflow-y:auto;animation:mup .24s cubic-bezier(.2,.8,.2,1);
-    max-width:560px;margin:0 auto;box-shadow:0 -8px 40px rgba(0,0,0,.18)}
-  .m-grip{width:38px;height:4px;border-radius:4px;background:#d3d1c9;margin:0 auto 14px}
-  .m-shead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-  .m-shead h3{margin:0;font-size:18px;font-weight:700}
-  .m-shead button{all:unset;cursor:pointer;font-size:14.5px;color:var(--mut)}
-  .m-field{background:var(--card);border-radius:14px;padding:4px 14px}
-  .m-field input,.m-field textarea{width:100%;border:0;outline:0;background:transparent;font:inherit;font-size:16px;color:var(--ink);padding:14px 0;resize:none}
-  .m-field input::placeholder,.m-field textarea::placeholder{color:#b6b5ae}
-  .m-frow{display:flex;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid var(--line);padding:9px 0}
-  .m-frow .dt{flex:1;font-size:14.5px;color:var(--mut)}
-  .m-chip{background:#eceae4;border-radius:9px;padding:8px 12px;font-size:14.5px;font-weight:600;color:var(--ink);border:0;font-family:inherit}
-  .m-lbl{font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;color:#a9a8a2;font-weight:600;margin:18px 0 8px}
-  .m-seg{display:flex;background:#eceae4;border-radius:11px;padding:3px}
-  .m-seg button{all:unset;cursor:pointer;flex:1;text-align:center;padding:9px;border-radius:9px;font-size:14.5px;font-weight:600;color:var(--mut)}
-  .m-seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
-  .m-colors{display:grid;grid-template-columns:repeat(6,1fr);gap:12px 6px}
-  .m-col{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px}
-  .m-col i{width:44px;height:44px;border-radius:50%;display:block}
-  .m-col.on i{box-shadow:0 0 0 2px #f6f5f1,0 0 0 4px #16181a}
-  .m-col span{font-size:10.5px;color:var(--mut);text-align:center;line-height:1.15}
-  .m-save{all:unset;cursor:pointer;display:block;text-align:center;width:100%;margin-top:20px;padding:16px;border-radius:14px;color:#fff;font-size:16.5px;font-weight:700}
-  .m-note{text-align:center;font-size:11.5px;color:#b0afa8;margin-top:10px}
-  .m-mgridsel{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
-  .m-mgridsel button{all:unset;cursor:pointer;text-align:center;padding:14px;border-radius:12px;background:#fff;font-size:15px;font-weight:600}
-  .m-mgridsel button.on{background:var(--ink);color:#fff}
-  .m-mgridsel button.cur{box-shadow:inset 0 0 0 2px var(--green);color:var(--green)}
-  .m-mgridsel button.on.cur{color:#fff;box-shadow:inset 0 0 0 2px var(--green)}
-  .m-yr{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:4px}
-  .m-yr b{font-size:19px}
-  .m-yr button{all:unset;cursor:pointer;width:32px;height:32px;border-radius:50%;background:#eceae4;display:flex;align-items:center;justify-content:center;font-size:15px;color:#4a4a4c}
-  .m-stat{display:flex;gap:8px}
-  .m-stat div{flex:1;background:var(--card);border-radius:12px;padding:13px}
-  .m-stat span{display:block;font-size:11px;color:var(--mut);font-weight:600;margin-bottom:4px}
-  .m-stat b{font-size:16px;font-weight:700;letter-spacing:-.3px}
-  .m-set label{display:block;font-size:12.5px;color:var(--mut);font-weight:600;margin:14px 0 6px}
-  .m-set input{width:100%;border:1px solid var(--line);border-radius:11px;padding:12px;font:inherit;font-size:15px;background:#fff;outline:0}
-  .m-act{all:unset;cursor:pointer;display:block;text-align:center;width:100%;margin-top:12px;padding:14px;border-radius:12px;background:var(--ink);color:#fff;font-size:15px;font-weight:600}
-  .m-act.ghost{background:#eceae4;color:var(--ink)}
-  .m-act.danger{background:#f6e3e1;color:#a53a2c}
-  .m-status{font-size:12.5px;color:var(--mut);margin-top:10px;text-align:center}
-  @keyframes mup{from{transform:translateY(100%)}to{transform:translateY(0)}}
-  @keyframes mfade{from{opacity:0}to{opacity:1}}
-  @media (prefers-reduced-motion:reduce){.m-sheet,.m-back{animation:none}}
-  `;
+body[data-ui="mobile"]{margin:0;background:#eceae5;display:flex;align-items:center;justify-content:center;
+  font-family:-apple-system,BlinkMacSystemFont,system-ui,"Segoe UI","Helvetica Neue",sans-serif;
+  color:#1b1a18;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+body[data-ui="mobile"] #app{
+  --ink:#1b1a18; --paper:#f6f5f2; --card:#fff; --green:#2f7a5b; --rust:#b4622f;
+  --m1:rgba(27,26,24,.06); --m2:rgba(27,26,24,.08); --m3:rgba(27,26,24,.3);
+  --m4:rgba(27,26,24,.42); --m5:rgba(27,26,24,.45); --m6:rgba(27,26,24,.6);
+  --safeT:env(safe-area-inset-top,0px); --safeB:env(safe-area-inset-bottom,0px);
+  position:relative;width:100%;max-width:440px;height:100vh;height:100dvh;
+  background:var(--paper);display:flex;flex-direction:column;overflow:hidden}
+@media(min-width:520px) and (min-height:800px){
+  body[data-ui="mobile"] #app{height:calc(100vh - 40px);max-height:900px;border-radius:34px;box-shadow:0 20px 60px rgba(0,0,0,.18)}
+}
+.mob *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+.mob button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
+.mob input,.mob select,.mob textarea{font-family:inherit}
+.mob .tnum{font-variant-numeric:tabular-nums}
 
-  const today = () => S.todayKey();
-  let M = null;
+.mob .hdr{padding:calc(20px + var(--safeT)) 20px 8px;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex:none}
+.mob .kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--m4);font-weight:600;display:flex;align-items:center;gap:6px}
+.mob .kicker i{width:6px;height:6px;border-radius:999px;display:block}
+.mob .title{font-size:30px;font-weight:700;letter-spacing:-.02em;margin-top:3px;line-height:1.05;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;max-width:100%}
+.mob .title.sm{font-size:23px}
+.mob .title .chev{font-size:15px;font-weight:700;color:var(--m3);transform:translateY(1px)}
+.mob button.title:active{opacity:.55}
+.mob .hbtns{display:flex;gap:8px;align-items:center;flex:none}
+.mob .pill{padding:0 14px;height:38px;display:flex;align-items:center;border-radius:999px;background:var(--m1);font-size:13px;font-weight:600;color:var(--m6);white-space:nowrap}
+.mob .pill:active{background:var(--m2)}
+.mob .fab{width:38px;height:38px;border-radius:999px;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(47,122,91,.32);transition:transform .12s}
+.mob .fab:active{transform:scale(.9)}
+.mob .fab svg{width:19px;height:19px}
+.mob .nav{display:flex;align-items:center;background:var(--m1);border-radius:999px;padding:3px;gap:1px}
+.mob .nav button{width:32px;height:32px;border-radius:999px;color:var(--m6);display:flex;align-items:center;justify-content:center;transition:background .12s}
+.mob .nav button:active{background:rgba(27,26,24,.1)}
+.mob .nav svg{width:15px;height:15px}
 
-  function init() {
-    const t = S.parseKey(today());
-    M = { tab: 'ajanda', view: 'month', y: t.y, m: t.m, sheet: null, dayKey: null, draft: null, weekOpen: false, plYear: false, pickY: t.y };
-  }
+.mob .scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 16px calc(84px + var(--safeB))}
+@keyframes mzin{from{transform:scale(.945);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes mzout{from{transform:scale(1.06);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes msheetup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes mfadein{from{opacity:0}to{opacity:1}}
+.mob .zin{animation:mzin .34s cubic-bezier(.2,.8,.2,1)}
+.mob .zout{animation:mzout .36s cubic-bezier(.2,.8,.2,1)}
+@media(prefers-reduced-motion:reduce){.mob .zin,.mob .zout{animation:none}}
 
-  /* ---------- yardımcılar ---------- */
-  function monthEvents(y, m) {
-    const p = S.pad(m + 1);
-    return S.data.events.filter(e => e.date.slice(0, 7) === y + '-' + p);
-  }
-  function yearEvents(y) { return S.data.events.filter(e => e.date.slice(0, 4) === String(y)); }
-  function timeLabel(e) { return e.time ? e.time : 'Tüm gün'; }
-  function dateLabel(k) {
-    const p = S.parseKey(k);
-    if (k === today()) return 'Bugün';
-    return p.d + ' ' + S.MONTHS_SHORT[p.m] + ' ' + S.WD_SHORT[S.weekday(k)];
-  }
+.mob .year{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 12px;min-height:100%;align-content:space-between}
+.mob .ymo{cursor:pointer}
+.mob .ymo-h{display:flex;align-items:baseline;gap:5px;margin-bottom:5px}
+.mob .ymo-n{font-size:13px;font-weight:700;letter-spacing:-.01em}
+.mob .ymo-c{font-size:9px;font-weight:600;color:var(--m3)}
+.mob .ycells{display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px}
+.mob .ycell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;border-radius:999px}
 
-  /* ---------- ay ızgarası ---------- */
-  function monthGrid(y, m) {
-    const first = (new Date(y, m, 1).getDay() + 6) % 7;
-    const dim = new Date(y, m + 1, 0).getDate();
-    const total = Math.ceil((first + dim) / 7) * 7;
-    const byDate = S.eventsByDate();
-    const tk = today();
-    let html = '<div class="m-wd">' + S.WD_MINI.map((w, i) => '<span>' + S.WD_SHORT[i] + '</span>').join('') + '</div>';
-    for (let w = 0; w < total / 7; w++) {
-      let cells = '', isNow = false;
-      for (let i = 0; i < 7; i++) {
-        const n = w * 7 + i - first + 1;
-        if (n < 1 || n > dim) { cells += '<span class="m-cell"></span>'; continue; }
-        const k = S.dkey(y, m, n);
-        if (k === tk) isNow = true;
-        const evs = byDate[k] || [];
-        const col = evs.length ? S.cat(evs[0].cat).color : '';
-        const cls = 'm-num' + (evs.length ? ' ev' : '') + (k === tk ? ' today' : '');
-        const style = evs.length ? ' style="background:' + col + '"' : '';
-        const dot = evs.length > 1 ? '<span class="m-dot" style="background:' + S.cat(evs[1].cat).color + '"></span>' : '<span class="m-dot"></span>';
-        cells += '<button class="m-cell" onclick="MB.day(\'' + k + '\')"><span class="' + cls + '"' + style + '>' + n + '</span>' + dot + '</button>';
-      }
-      html += '<div class="m-week' + (isNow ? ' now' : '') + '">' + cells + '</div>';
-    }
-    return html;
-  }
+.mob .dows{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:6px}
+.mob .dows div{text-align:center;font-size:10px;font-weight:600;color:rgba(27,26,24,.35)}
+.mob .mrows{display:flex;flex-direction:column;gap:2px}
+.mob .mrow{display:grid;grid-template-columns:repeat(7,1fr);border-radius:14px;padding:4px 2px;cursor:pointer}
+.mob .mcell{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0}
+.mob .mnum{width:26px;height:26px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.mob .mdots{height:4px;display:flex;gap:2px}
+.mob .mdot{width:4px;height:4px;border-radius:999px}
 
-  /* ---------- ekranlar ---------- */
-  function screenMonth() {
-    const evs = monthEvents(M.y, M.m);
-    const tk = today();
-    let list, secTitle, secBtn;
-    if (M.weekOpen) {
-      const wd = S.weekday(tk);
-      const start = S.shiftKey(tk, -wd), end = S.shiftKey(start, 6);
-      list = S.data.events.filter(e => e.date >= start && e.date <= end);
-      secTitle = 'Bu hafta'; secBtn = 'Yaklaşanı gör';
-    } else {
-      list = S.data.events.filter(e => e.date >= tk).slice(0, 200);
-      secTitle = 'Yaklaşan'; secBtn = 'Haftayı aç';
-    }
-    list.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b));
-    if (!M.weekOpen) list = list.slice(0, 5);
+.mob .wrap{display:flex;flex-direction:column;gap:14px;min-height:100%}
+.mob .wday{flex:1 0 auto;display:flex;gap:14px}
+.mob .wleft{width:46px;flex:none;text-align:center;padding-top:2px}
+.mob .wdow{font-size:10px;font-weight:600;color:rgba(27,26,24,.38);text-transform:uppercase;letter-spacing:.06em}
+.mob .wnum{margin:3px auto 0;width:30px;height:30px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700}
+.mob .wright{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid rgba(27,26,24,.07)}
+.mob .ev{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--card);border-radius:14px;text-align:left;width:100%}
+.mob .ev:active{background:#f0efec}
+.mob .ev-c{width:7px;height:7px;border-radius:999px;flex:none}
+.mob .ev-t{font-size:11.5px;font-weight:700;color:var(--m6);width:38px;flex:none}
+.mob .ev-n{flex:1;min-width:0;font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mob .ev-a{font-size:12.5px;font-weight:600}
+.mob .addline{font-size:12.5px;color:rgba(27,26,24,.32);padding:8px 2px;text-align:left}
 
-    return `
-    <div class="m-eyebrow"><button onclick="MB.sheet('set')">${M.y} · ${evs.length} KAYIT</button></div>
-    <div class="m-head">
-      <button class="m-title" onclick="MB.sheet('month')">${S.MONTHS[M.m]} <small>▾</small></button>
-      <div class="m-ctrls">
-        <div class="m-pill"><button onclick="MB.step(-1)">‹</button><button onclick="MB.step(1)">›</button></div>
-        <button class="m-btn" onclick="MB.setView('year')">Yıl</button>
-        <button class="m-add" onclick="MB.newRec()">+</button>
-      </div>
-    </div>
-    ${monthGrid(M.y, M.m)}
-    <div class="m-sec"><h3>${secTitle}</h3><button onclick="MB.toggleWeek()">${secBtn}</button></div>
-    <div class="m-list">${list.length ? list.map(rowHtml).join('') : '<div class="m-empty">Kayıt yok. Sağ üstteki + ile ekleyin.</div>'}</div>`;
-  }
+.mob .sechd{margin-top:22px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.mob .sechd .t{font-size:13px;font-weight:700;letter-spacing:-.01em}
+.mob .sechd .a{font-size:12px;font-weight:600;color:var(--green)}
+.mob .prev{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.mob .pcard{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--card);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05);text-align:left;width:100%}
+.mob .pbar{width:3px;height:26px;border-radius:2px;flex:none}
+.mob .pttl{font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mob .pwhen{font-size:11.5px;color:var(--m5);margin-top:1px}
+.mob .empty{padding:26px 4px;text-align:center;font-size:13px;color:var(--m5);line-height:1.5}
 
-  function rowHtml(e) {
-    const c = S.cat(e.cat);
-    const amt = (e.amtType === 'inc' || e.amtType === 'exp')
-      ? '<div class="m-amt" style="color:' + (e.amtType === 'inc' ? '#2f6b4f' : '#a53a2c') + '">' + (e.amtType === 'inc' ? '+' : '−') + S.money(e.amt) + '</div>' : '';
-    return `<div class="m-row" onclick="MB.day('${e.date}')">
-      <span class="m-bar" style="background:${c.color}"></span>
-      <div style="flex:1;min-width:0"><h4>${S.esc(e.text || c.name)}</h4>
-      <p>${dateLabel(e.date)} · ${timeLabel(e)}</p></div>${amt}</div>`;
-  }
+.mob .hero{background:var(--ink);color:var(--paper);border-radius:24px;padding:20px 20px 18px}
+.mob .hero-l{font-size:11.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:rgba(246,245,242,.5)}
+.mob .hero-big{font-size:32px;font-weight:700;letter-spacing:-.03em;margin-top:6px}
+.mob .hero-g{display:flex;gap:10px;margin-top:18px}
+.mob .hero-g>div{flex:1;background:rgba(246,245,242,.08);border-radius:14px;padding:11px 13px}
+.mob .hero-g .k{font-size:11px;color:rgba(246,245,242,.5);font-weight:600}
+.mob .hero-g .v{font-size:16px;font-weight:700;margin-top:2px}
+.mob .list{margin-top:10px;background:var(--card);border-radius:20px;box-shadow:0 1px 2px rgba(0,0,0,.05);overflow:hidden}
+.mob .li{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid rgba(27,26,24,.06);width:100%;text-align:left}
+.mob .li:last-child{border-bottom:0}
+.mob .li:active{background:#faf9f7}
+.mob .li-d{width:30px;height:30px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+.mob .li-n{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.mob .li-s{font-size:11.5px;color:var(--m5);margin-top:1px}
+.mob .li-a{font-size:14px;font-weight:600}
+.mob .ghost{margin-top:16px;padding:15px;border-radius:18px;background:var(--m1);text-align:center;font-size:14px;font-weight:600;color:var(--m6);width:100%;display:block}
+.mob .ghost:active{background:var(--m2)}
 
-  function screenYear() {
-    const tp = S.parseKey(today());
-    const evs = yearEvents(M.y);
-    const byDate = S.eventsByDate();
-    const mini = S.MONTHS.map((name, m) => {
-      const first = (new Date(M.y, m, 1).getDay() + 6) % 7;
-      const dim = new Date(M.y, m + 1, 0).getDate();
-      let cells = '';
-      for (let i = 0; i < first; i++) cells += '<span class="m-md"></span>';
-      let cnt = 0;
-      for (let n = 1; n <= dim; n++) {
-        const k = S.dkey(M.y, m, n);
-        const list = byDate[k] || [];
-        if (list.length) cnt++;
-        const isT = k === today();
-        cells += '<span class="m-md">' + (list.length
-          ? '<i class="' + (isT ? 'ring' : '') + '" style="background:' + S.cat(list[0].cat).color + '">' + n + '</i>'
-          : (isT ? '<i class="ring" style="background:#16181a">' + n + '</i>' : n)) + '</span>';
-      }
-      const isNow = (M.y === tp.y && m === tp.m);
-      return `<div><h4 class="${isNow ? 'now' : ''}" >${name}${cnt ? '<span>' + cnt + '</span>' : ''}</h4>
-        <div class="m-mgrid" onclick="MB.openMonth(${m})">${cells}</div></div>`;
-    }).join('');
+.mob .tabs{position:absolute;left:0;right:0;bottom:0;padding:8px 16px calc(14px + var(--safeB));background:rgba(246,245,242,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgba(27,26,24,.07);display:flex;gap:8px;z-index:30}
+.mob .tab{flex:1;padding:11px;border-radius:16px;text-align:center;font-size:12.5px;font-weight:700;color:var(--m5)}
+.mob .tab.on{background:var(--ink);color:var(--paper)}
 
-    return `
-    <div class="m-eyebrow"><button onclick="MB.sheet('set')">YIL · ${evs.length} KAYIT</button></div>
-    <div class="m-head">
-      <button class="m-title" onclick="MB.sheet('month')">${M.y} <small>▾</small></button>
-      <div class="m-ctrls">
-        <div class="m-pill"><button onclick="MB.stepYear(-1)">‹</button><button onclick="MB.stepYear(1)">›</button></div>
-        <button class="m-btn" onclick="MB.goToday()">Bugün</button>
-        <button class="m-add" onclick="MB.newRec()">+</button>
-      </div>
-    </div>
-    <div class="m-mini">${mini}</div>`;
-  }
+.mob .hint{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--safeB));padding:7px 14px;border-radius:999px;background:rgba(27,26,24,.78);color:var(--paper);font-size:11px;font-weight:600;transition:opacity .4s;pointer-events:none;white-space:nowrap;z-index:20;opacity:0}
+.mob .toast{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--safeB));padding:9px 16px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:12.5px;font-weight:600;z-index:60;white-space:nowrap;animation:mfadein .2s;pointer-events:none}
 
-  function screenPL() {
-    const inRange = e => M.plYear ? e.date.slice(0, 4) === String(M.y) : e.date.slice(0, 7) === M.y + '-' + S.pad(M.m + 1);
-    const t = S.totals(inRange);
-    const list = S.data.events.filter(e => (e.amtType === 'inc' || e.amtType === 'exp') && inRange(e))
-      .sort((a, b) => a.date < b.date ? 1 : -1);
-    return `
-    <div class="m-eyebrow">${M.plYear ? 'YIL' : S.MONTHS[M.m].toUpperCase()} · ${list.length} HAREKET</div>
-    <div class="m-head">
-      <button class="m-title" onclick="MB.sheet('month')">${M.plYear ? M.y : S.MONTHS[M.m]} <small>▾</small></button>
-      <div class="m-ctrls">
-        <div class="m-pill"><button onclick="MB.step(-1)">‹</button><button onclick="MB.step(1)">›</button></div>
-        <button class="m-btn" onclick="MB.togglePlYear()" style="${M.plYear ? 'background:#16181a;color:#fff' : ''}">Yıl</button>
-        <button class="m-add" onclick="MB.newRec()">+</button>
-      </div>
-    </div>
-    <div class="m-stat">
-      <div><span>GELİR</span><b style="color:#2f6b4f">${S.money(t.inc)}</b></div>
-      <div><span>GİDER</span><b style="color:#a53a2c">${S.money(t.exp)}</b></div>
-      <div><span>NET</span><b style="color:${t.net >= 0 ? '#2f6b4f' : '#a53a2c'}">${S.money(t.net)}</b></div>
-    </div>
-    <div class="m-sec"><h3>Hareketler</h3></div>
-    <div class="m-list">${list.length ? list.map(rowHtml).join('') : '<div class="m-empty">Bu dönemde tutarlı kayıt yok.<br>Kayıt eklerken “Tutar” alanından Gider ya da Gelir seçin.</div>'}</div>`;
-  }
+.mob .scrim{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(27,26,24,.28);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.mob .sheet{background:var(--paper);border-radius:28px 28px 0 0;padding:10px 20px calc(28px + var(--safeB));animation:msheetup .3s cubic-bezier(.2,.8,.2,1);box-shadow:0 -8px 30px rgba(0,0,0,.14);max-height:92%;overflow-y:auto}
+.mob .grab{width:38px;height:5px;border-radius:999px;background:rgba(27,26,24,.18);margin:0 auto 14px}
+.mob .sh-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.mob .sh-t{font-size:17px;font-weight:700;letter-spacing:-.02em}
+.mob .sh-x{font-size:13px;font-weight:600;color:var(--m5)}
+.mob .field{margin-top:14px;background:var(--card);border-radius:18px;padding:2px 16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.mob .field .div{height:1px;background:var(--m2)}
+.mob .inp{width:100%;border:0;background:transparent;padding:14px 0;font-size:17px;font-weight:600;letter-spacing:-.01em;color:var(--ink);outline:none}
+.mob .frow{display:flex;align-items:center;gap:10px;padding:11px 0}
+.mob .flab{font-size:14px;font-weight:600;color:var(--m5);flex:1;min-width:0}
+.mob .mini{width:86px;text-align:center;border:0;border-radius:10px;background:var(--m1);padding:9px 4px;font-size:15px;font-weight:600;color:var(--ink);outline:none}
+.mob .lab{margin-top:18px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--m4)}
+.mob .seg{margin-top:10px;display:flex;gap:6px;background:var(--m1);padding:4px;border-radius:14px}
+.mob .seg button{flex:1;padding:9px;border-radius:11px;font-size:12.5px;font-weight:700;color:var(--m5)}
+.mob .seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.mob .pal{margin-top:10px;display:grid;grid-template-columns:repeat(6,1fr);gap:12px 10px}
+.mob .pal button{display:flex;flex-direction:column;align-items:center;gap:6px}
+.mob .pal .sw{width:100%;aspect-ratio:1;border-radius:999px}
+.mob .pal .nm{font-size:9.5px;font-weight:600;white-space:nowrap;color:var(--m5)}
+.mob .pal button.on .nm{color:var(--ink)}
+.mob .pick{margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mob .pick button{padding:14px 4px;border-radius:14px;background:var(--card);font-size:14px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.mob .pick button.on{background:var(--ink);color:var(--paper)}
+.mob .pick button.now{box-shadow:inset 0 0 0 1.5px var(--green)}
+.mob .yhead{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:14px}
+.mob .yhead .y{font-size:20px;font-weight:700;min-width:74px;text-align:center}
+.mob .yhead button{width:34px;height:34px;border-radius:999px;background:var(--m1);display:flex;align-items:center;justify-content:center;color:var(--m6)}
+.mob .yhead svg{width:15px;height:15px}
+.mob .save{margin-top:22px;padding:16px;border-radius:18px;text-align:center;font-size:15px;font-weight:700;color:var(--ink);width:100%}
+.mob .del{margin-top:9px;padding:13px;border-radius:16px;text-align:center;font-size:13px;font-weight:600;color:var(--rust);width:100%;background:rgba(180,98,47,.09)}
+.mob .note{margin-top:9px;text-align:center;font-size:11.5px;color:var(--m4);font-weight:500;line-height:1.45}
+`;
 
-  /* ---------- sayfalar (bottom sheet) ---------- */
-  function sheetMonth() {
-    const tp = S.parseKey(today());
-    return sheetWrap('Ay seç', `
-      <div class="m-yr"><button onclick="MB.pickYear(-1)">‹</button><b>${M.pickY}</b><button onclick="MB.pickYear(1)">›</button></div>
-      <div class="m-mgridsel">${S.MONTHS_SHORT.map((mn, i) => {
-      const on = (M.pickY === M.y && i === M.m && M.view === 'month');
-      const cur = (M.pickY === tp.y && i === tp.m);
-      return `<button class="${on ? 'on' : ''} ${cur ? 'cur' : ''}" onclick="MB.chooseMonth(${i})">${mn}</button>`;
-    }).join('')}</div>
-      <div class="m-note">Yeşil çerçeveli olan içinde bulunduğun ay.</div>`);
-  }
-
-  function sheetDay() {
-    const k = M.dayKey, p = S.parseKey(k);
-    const list = S.eventsOn(k);
-    const rows = list.length ? list.map(e => {
-      const c = S.cat(e.cat);
-      const amt = (e.amtType === 'inc' || e.amtType === 'exp')
-        ? '<div class="m-amt" style="color:' + (e.amtType === 'inc' ? '#2f6b4f' : '#a53a2c') + '">' + (e.amtType === 'inc' ? '+' : '−') + S.money(e.amt) + '</div>' : '';
-      return `<div class="m-row" onclick="MB.edit('${e.id}')">
-        <span class="m-bar" style="background:${c.color}"></span>
-        <div style="flex:1;min-width:0"><h4>${S.esc(e.text || c.name)}</h4><p>${timeLabel(e)} · ${S.esc(c.name)}</p></div>${amt}</div>`;
-    }).join('') : '<div class="m-empty">Bu güne kayıt yok.</div>';
-    return sheetWrap(p.d + ' ' + S.MONTHS[p.m], `
-      <div class="m-note" style="margin:-8px 0 12px;text-align:left">${S.WD_FULL[S.weekday(k)]}${k === today() ? ' · bugün' : ''}</div>
-      <div class="m-list">${rows}</div>
-      <button class="m-act" onclick="MB.newRec('${k}')">+ Bu güne kayıt ekle</button>`);
-  }
-
-  function sheetRecord() {
-    const d = M.draft;
-    const cats = S.data.cats;
-    const sel = S.cat(d.cat);
-    const p = S.parseKey(d.date);
-    const amtRow = d.amtType === 'none' ? '' : `
-      <div class="m-field" style="margin-top:10px">
-        <input id="mAmt" type="number" inputmode="decimal" step="0.01" placeholder="Tutar (€)" value="${d.amt || ''}">
-      </div>`;
-    return sheetWrap(d.id ? 'Kaydı düzenle' : 'Yeni kayıt', `
-      <div class="m-field">
-        <textarea id="mTitle" rows="1" placeholder="Ne yapacaksın?" oninput="MB.grow(this)">${S.esc(d.text)}</textarea>
-        <div class="m-frow">
-          <span class="dt">${p.d}. ${S.MONTHS_SHORT[p.m]} ${p.y}</span>
-          <input class="m-chip" id="mDate" type="date" value="${d.date}" onchange="MB.field('date',this.value)">
-          <input class="m-chip" id="mTime" type="time" value="${d.time || ''}" onchange="MB.field('time',this.value)">
-        </div>
-      </div>
-      <div class="m-lbl">Tutar</div>
-      <div class="m-seg">
-        <button class="${d.amtType === 'none' ? 'on' : ''}" onclick="MB.field('amtType','none')">Yok</button>
-        <button class="${d.amtType === 'exp' ? 'on' : ''}" onclick="MB.field('amtType','exp')">Gider</button>
-        <button class="${d.amtType === 'inc' ? 'on' : ''}" onclick="MB.field('amtType','inc')">Gelir</button>
-      </div>
-      ${amtRow}
-      <div class="m-lbl">Renk</div>
-      <div class="m-colors">${cats.map(c => `
-        <button class="m-col ${c.id === d.cat ? 'on' : ''}" onclick="MB.field('cat','${c.id}')">
-          <i style="background:${c.color}"></i><span>${S.esc(c.name)}</span></button>`).join('')}</div>
-      <button class="m-save" style="background:${sel.color}" onclick="MB.saveRec()">Kaydet</button>
-      ${d.id ? '<button class="m-act danger" onclick="MB.delRec()">Kaydı sil</button>' : ''}
-      <div class="m-note">Yıl görünümünde o gün bu renkle işaretlenir.</div>`);
-  }
-
-  function sheetSettings() {
-    const c = S.cfg();
-    const st = S.status;
-    return sheetWrap('Ayarlar', `
-      <div class="m-set">
-        <div style="font-size:13.5px;color:#8b8b90;line-height:1.5">Kayıtlar telefonda saklanır; GitHub üzerinden bilgisayarla eşitlenir.</div>
-        <label>GitHub token (yalnızca <b>gist</b> yetkisi)</label>
-        <input id="mTok" type="password" autocomplete="off" placeholder="ghp_..." value="${S.escAttr(c.token)}">
-        <label>Gist ID</label>
-        <input id="mGist" autocomplete="off" placeholder="Bilgisayarda oluşan kimliği yapıştırın" value="${S.escAttr(c.gist)}">
-        <button class="m-act" onclick="MB.saveCfg()">Kaydet ve eşitle</button>
-        <button class="m-act ghost" onclick="Store.sync()">Şimdi eşitle</button>
-        <div class="m-status">${S.esc(st.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
-        <label style="margin-top:22px">Yedek</label>
-        <button class="m-act ghost" onclick="Store.exportJSON()">Yedeği indir</button>
-        <label class="m-act ghost" style="display:block">Yedek yükle<input type="file" accept="application/json" onchange="MB.importFile(this)" style="display:none"></label>
-      </div>`);
-  }
-
-  function sheetWrap(title, body) {
-    return `<div class="m-back" onclick="MB.close()"></div>
-      <div class="m-sheet"><div class="m-grip"></div>
-        <div class="m-shead"><h3>${S.esc(title)}</h3><button onclick="MB.close()">Vazgeç</button></div>
-        ${body}</div>`;
-  }
-
-  /* ---------- render ---------- */
-  function render() {
-    let screen;
-    if (M.tab === 'pl') screen = screenPL();
-    else screen = M.view === 'year' ? screenYear() : screenMonth();
-
-    let sheet = '';
-    if (M.sheet === 'month') sheet = sheetMonth();
-    else if (M.sheet === 'day') sheet = sheetDay();
-    else if (M.sheet === 'rec') sheet = sheetRecord();
-    else if (M.sheet === 'set') sheet = sheetSettings();
-
-    document.getElementById('app').innerHTML =
-      '<div class="m-app">' + screen + '</div>' +
-      '<div class="m-nav">' +
-      '<button class="' + (M.tab === 'ajanda' ? 'on' : '') + '" onclick="MB.tab(\'ajanda\')">Ajanda</button>' +
-      '<button class="' + (M.tab === 'pl' ? 'on' : '') + '" onclick="MB.tab(\'pl\')">P&amp;L</button>' +
-      '</div>' + sheet;
-
-    const ta = document.getElementById('mTitle');
-    if (ta) { grow(ta); if (M.focusTitle) { M.focusTitle = false; ta.focus(); } }
-  }
-
-  function grow(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 140) + 'px'; }
-
-  function syncDraft() {
-    if (!M.draft) return;
-    const t = document.getElementById('mTitle'); if (t) M.draft.text = t.value;
-    const d = document.getElementById('mDate'); if (d && d.value) M.draft.date = d.value;
-    const h = document.getElementById('mTime'); if (h) M.draft.time = h.value;
-    const a = document.getElementById('mAmt'); if (a) M.draft.amt = Number(a.value) || 0;
-  }
-
-  /* ---------- eylemler ---------- */
-  const MB = {
-    tab(t) { M.tab = t; M.sheet = null; render(); },
-    setView(v) { M.view = v; render(); },
-    step(n) {
-      let m = M.m + n, y = M.y;
-      if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; }
-      M.m = m; M.y = y; M.pickY = y; render();
-    },
-    stepYear(n) { M.y += n; M.pickY = M.y; render(); },
-    goToday() { const t = S.parseKey(today()); M.y = t.y; M.m = t.m; M.pickY = t.y; M.view = 'month'; render(); },
-    openMonth(m) { M.m = m; M.view = 'month'; render(); },
-    toggleWeek() { M.weekOpen = !M.weekOpen; render(); },
-    togglePlYear() { M.plYear = !M.plYear; render(); },
-    sheet(s) { M.pickY = M.y; M.sheet = s; render(); },
-    close() { M.sheet = null; M.draft = null; render(); },
-    pickYear(n) { M.pickY += n; render(); },
-    chooseMonth(i) { M.m = i; M.y = M.pickY; M.view = 'month'; M.sheet = null; render(); },
-    day(k) { M.dayKey = k; M.sheet = 'day'; render(); },
-    newRec(k) {
-      M.draft = { id: null, date: k || M.dayKey || today(), time: '10:00', text: '', cat: 'mavi', amtType: 'none', amt: 0 };
-      M.sheet = 'rec'; M.focusTitle = true; render();
-    },
-    edit(id) {
-      const e = S.data.events.filter(x => x.id === id)[0]; if (!e) return;
-      M.draft = Object.assign({}, e); M.sheet = 'rec'; render();
-    },
-    field(k, v) { syncDraft(); M.draft[k] = v; render(); },
-    grow(el) { grow(el); },
-    saveRec() {
-      syncDraft();
-      const d = M.draft;
-      const payload = { date: d.date, time: d.time, text: (d.text || '').trim(), cat: d.cat, amtType: d.amtType, amt: d.amtType === 'none' ? 0 : (Number(d.amt) || 0) };
-      if (!payload.text) payload.text = S.cat(d.cat).name;
-      if (d.id) S.updateEvent(d.id, payload); else S.addEvent(payload);
-      const p = S.parseKey(payload.date); M.y = p.y; M.m = p.m;
-      M.sheet = null; M.draft = null; render();
-    },
-    delRec() {
-      if (!M.draft || !M.draft.id) return;
-      if (!confirm('Bu kayıt silinsin mi?')) return;
-      S.deleteEvent(M.draft.id); M.sheet = null; M.draft = null; render();
-    },
-    saveCfg() {
-      const t = document.getElementById('mTok').value.trim();
-      const g = document.getElementById('mGist').value.trim();
-      S.setCfg({ token: t, gist: g });
-      S.sync();
-    },
-    importFile(input) {
-      const f = input.files && input.files[0]; if (!f) return;
-      const r = new FileReader();
-      r.onload = () => {
-        try { const n = S.importJSON(r.result); alert(n + ' kayıt yüklendi.'); render(); }
-        catch (e) { alert('Yedek okunamadı: ' + e.message); }
-      };
-      r.readAsText(f); input.value = '';
-    }
+  const SVG = {
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+    left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+    right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
   };
 
+  /* ---------------- tarih yardımcıları ---------------- */
+  const pad = S.pad;
+  const iso = (y, m, d) => S.dkey(y, m, d);
+  const parseISO = s => { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+  const dkey = dt => iso(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  const daysIn = (y, m) => new Date(y, m + 1, 0).getDate();
+  const dowMon = dt => (dt.getDay() + 6) % 7;
+  const firstDow = (y, m) => dowMon(new Date(y, m, 1));
+  const addDays = (dt, n) => { const x = new Date(dt); x.setDate(x.getDate() + n); return x; };
+  const startOfWeek = dt => addDays(dt, -dowMon(dt));
+  const sameDay = (a, b) => dkey(a) === dkey(b);
+  const TODAY = new Date();
+  const esc = S.esc;
+  const fmt = S.money;
+
+  /* ---------------- veri köprüsü ---------------- */
+  function dayEvents(y, m, d) {
+    return S.eventsOn(iso(y, m, d)).map(e => Object.assign({}, e, { color: S.cat(e.cat).color }));
+  }
+  function monthCount(y, m) {
+    const p = y + '-' + pad(m + 1);
+    return S.data.events.filter(e => e.date.slice(0, 7) === p).length;
+  }
+  function yearCount(y) { return S.data.events.filter(e => e.date.slice(0, 4) === String(y)).length; }
+  function firstColor(y, m, d) { const e = dayEvents(y, m, d); return e.length ? e[0].color : null; }
+  const amountColor = e => (!e.amt || e.amtType === 'none') ? GREEN : (e.amtType === 'inc' ? GREEN : RUST);
+  const amountLabel = e => (!e.amt || e.amtType === 'none') ? '' : (e.amtType === 'inc' ? '+' : '') + fmt(e.amt);
+
+  /* ---------------- görünüm durumu ---------------- */
+  let V = null;
+  function loadUI() {
+    let ui = { tab: 'ajanda', level: 'ay' };
+    try { const raw = localStorage.getItem('ajanda_ui_mob'); if (raw) ui = Object.assign(ui, JSON.parse(raw)); } catch (e) { }
+    return ui;
+  }
+  function saveUI() { try { localStorage.setItem('ajanda_ui_mob', JSON.stringify({ tab: V.tab, level: V.level })); } catch (e) { } }
+
+  function initState() {
+    const ui = loadUI();
+    V = {
+      tab: ui.tab, level: ui.level,
+      y: TODAY.getFullYear(), m: TODAY.getMonth(), week: startOfWeek(TODAY),
+      pnlY: TODAY.getFullYear(), pnlM: TODAY.getMonth(), anim: 'zin'
+    };
+  }
+
+  /* ---------------- kabuk ---------------- */
+  const $ = id => document.getElementById(id);
+  function h(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content; }
+
+  function buildShell() {
+    const app = $('app');
+    app.className = 'mob';
+    app.innerHTML = `
+      <div class="hdr">
+        <div style="min-width:0">
+          <div class="kicker" id="mKicker"></div>
+          <button class="title" id="mTitle"></button>
+        </div>
+        <div class="hbtns">
+          <div class="nav" id="mNav"></div>
+          <button class="pill" id="mZoom"></button>
+          <button class="fab" id="mAdd" aria-label="Yeni kayıt">${SVG.plus}</button>
+        </div>
+      </div>
+      <div class="scroll" id="mScroll"></div>
+      <div class="hint" id="mHint"></div>
+      <div class="tabs">
+        <button class="tab" id="mTabA">Ajanda</button>
+        <button class="tab" id="mTabP">P&amp;L</button>
+      </div>
+      <div id="mSheetHost"></div>
+      <div id="mToastHost"></div>`;
+    $('mTabA').onclick = () => { V.tab = 'ajanda'; render(); };
+    $('mTabP').onclick = () => { V.tab = 'pnl'; render(); };
+    $('mKicker').onclick = openSettings;
+    bindGestures();
+  }
+
+  function setTitle(text, onTap) {
+    const el = $('mTitle');
+    el.innerHTML = esc(text) + (onTap ? '<span class="chev">▾</span>' : '');
+    el.onclick = onTap || null;
+    el.style.cursor = onTap ? 'pointer' : 'default';
+  }
+  function navPair(fn) {
+    $('mNav').innerHTML = `<button aria-label="Önceki">${SVG.left}</button><button aria-label="Sonraki">${SVG.right}</button>`;
+    const b = $('mNav').querySelectorAll('button');
+    b[0].onclick = () => fn(-1); b[1].onclick = () => fn(1);
+    $('mNav').style.display = 'flex';
+  }
+  function setKicker(text) {
+    const st = S.status;
+    const dot = st.kind === 'err' ? RUST : (st.kind === 'sync' ? 'rgba(27,26,24,.3)' : '');
+    $('mKicker').innerHTML = (dot ? `<i style="background:${dot}"></i>` : '') + esc(text);
+  }
+
+  /* ---------------- render ---------------- */
+  function render() {
+    if (!V) initState();
+    if (!$('mScroll')) buildShell();
+    saveUI();
+    const isA = V.tab === 'ajanda';
+    $('mTabA').className = 'tab' + (isA ? ' on' : '');
+    $('mTabP').className = 'tab' + (isA ? '' : ' on');
+    isA ? renderAjanda() : renderPnl();
+  }
+
+  function renderAjanda() {
+    const zl = { yil: 'Bugün', ay: 'Yıl', hafta: 'Ay' }[V.level];
+    $('mZoom').textContent = zl;
+    $('mZoom').style.display = '';
+    $('mZoom').onclick = () => {
+      if (V.level === 'hafta') { V.m = V.week.getMonth(); V.y = V.week.getFullYear(); go('ay', 'zout'); }
+      else if (V.level === 'ay') go('yil', 'zout');
+      else { V.y = TODAY.getFullYear(); V.m = TODAY.getMonth(); V.week = startOfWeek(TODAY); go('hafta', 'zin'); }
+    };
+    $('mAdd').onclick = () => openSheet(null, defaultDate());
+
+    const wEnd = addDays(V.week, 6);
+    const sameM = V.week.getMonth() === wEnd.getMonth();
+    const weekLabel = sameM
+      ? `${V.week.getDate()} – ${wEnd.getDate()} ${MONTHS[V.week.getMonth()]}`
+      : `${V.week.getDate()} ${SHORT[V.week.getMonth()]} – ${wEnd.getDate()} ${SHORT[wEnd.getMonth()]}`;
+
+    if (V.level === 'yil') setTitle(String(V.y), openYearPick);
+    else if (V.level === 'ay') setTitle(MONTHS[V.m], () => openMonthPick('ajanda'));
+    else setTitle(weekLabel, null);
+    $('mTitle').classList.toggle('sm', V.level === 'hafta');
+    setKicker({
+      yil: `Yıl · ${yearCount(V.y)} kayıt`,
+      ay: `${V.y} · ${monthCount(V.y, V.m)} kayıt`,
+      hafta: `${V.week.getFullYear()} · ${weekNo(V.week)}. hafta`
+    }[V.level]);
+
+    navPair(step);
+    const sc = $('mScroll');
+    sc.innerHTML = '';
+    if (V.level === 'yil') sc.appendChild(viewYear());
+    else if (V.level === 'ay') sc.appendChild(viewMonth());
+    else sc.appendChild(viewWeek());
+    sc.scrollTop = 0;
+    showHint(V.level === 'yil' ? 'Aya dokun · aşağı kaydır → ay' : 'Yukarı kaydır → uzaklaş');
+  }
+
+  function weekNo(dt) {
+    const t = new Date(dt.getFullYear(), 0, 1);
+    return Math.floor((startOfWeek(dt) - startOfWeek(t)) / 604800000) + 1;
+  }
+  function step(n) {
+    if (V.tab === 'pnl') { const d = new Date(V.pnlY, V.pnlM + n, 1); V.pnlY = d.getFullYear(); V.pnlM = d.getMonth(); render(); return; }
+    if (V.level === 'yil') V.y += n;
+    else if (V.level === 'ay') { const d = new Date(V.y, V.m + n, 1); V.y = d.getFullYear(); V.m = d.getMonth(); }
+    else V.week = addDays(V.week, 7 * n);
+    V.anim = 'zin'; render();
+  }
+  function go(level, anim) { V.level = level; V.anim = anim || 'zin'; render(); }
+  function defaultDate() {
+    if (V.tab === 'pnl') return (V.pnlY === TODAY.getFullYear() && V.pnlM === TODAY.getMonth()) ? dkey(TODAY) : iso(V.pnlY, V.pnlM, 1);
+    if (V.level === 'hafta') return dkey(V.week <= TODAY && TODAY <= addDays(V.week, 6) ? TODAY : V.week);
+    if (V.level === 'ay') return (V.y === TODAY.getFullYear() && V.m === TODAY.getMonth()) ? dkey(TODAY) : iso(V.y, V.m, 1);
+    return dkey(TODAY);
+  }
+
+  /* ---------------- yıl ---------------- */
+  function viewYear() {
+    const wrap = document.createElement('div');
+    wrap.className = 'year ' + V.anim;
+    for (let m = 0; m < 12; m++) {
+      const isCur = V.y === TODAY.getFullYear() && m === TODAY.getMonth();
+      const el = document.createElement('div'); el.className = 'ymo';
+      let cells = '';
+      for (let i = 0; i < firstDow(V.y, m); i++) cells += '<div class="ycell"></div>';
+      for (let d = 1; d <= daysIn(V.y, m); d++) {
+        const today = isCur && d === TODAY.getDate();
+        const c = firstColor(V.y, m, d);
+        const color = c ? '#fff' : (today ? '#f6f5f2' : 'rgba(27,26,24,.42)');
+        const bg = c ? c : (today ? INK : 'transparent');
+        const w = (c || today) ? 700 : 400;
+        const ring = (today && c) ? 'box-shadow:inset 0 0 0 1.5px ' + INK + ';' : '';
+        cells += `<div class="ycell" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>`;
+      }
+      el.innerHTML = `<div class="ymo-h">
+          <div class="ymo-n" style="color:${isCur ? GREEN : INK}">${MONTHS[m]}</div>
+          <div class="ymo-c">${monthCount(V.y, m) || ''}</div>
+        </div><div class="ycells">${cells}</div>`;
+      el.onclick = () => { V.m = m; go('ay', 'zin'); };
+      wrap.appendChild(el);
+    }
+    return wrap;
+  }
+
+  /* ---------------- ay ---------------- */
+  function viewMonth() {
+    const frag = document.createDocumentFragment();
+    const box = document.createElement('div'); box.className = V.anim;
+    box.innerHTML = `<div class="dows">${DOW.map(d => `<div>${d}</div>`).join('')}</div><div class="mrows"></div>`;
+    const rows = box.querySelector('.mrows');
+    const isCur = V.y === TODAY.getFullYear() && V.m === TODAY.getMonth();
+    let cells = [];
+    for (let i = 0; i < firstDow(V.y, V.m); i++) cells.push(null);
+    for (let d = 1; d <= daysIn(V.y, V.m); d++) cells.push(d);
+    while (cells.length % 7) cells.push(null);
+    for (let r = 0; r < cells.length / 7; r++) {
+      const slice = cells.slice(r * 7, r * 7 + 7);
+      const hasToday = isCur && slice.indexOf(TODAY.getDate()) >= 0;
+      const row = document.createElement('div');
+      row.className = 'mrow';
+      row.style.background = hasToday ? 'rgba(47,122,91,.08)' : 'transparent';
+      row.innerHTML = slice.map(d => {
+        if (!d) return '<div class="mcell"></div>';
+        const today = isCur && d === TODAY.getDate();
+        const evs = dayEvents(V.y, V.m, d);
+        const c = evs.length ? evs[0].color : null;
+        const color = c ? '#fff' : (today ? '#f6f5f2' : 'rgba(27,26,24,.85)');
+        const bg = c ? c : (today ? GREEN : 'transparent');
+        const w = (c || today) ? 700 : 500;
+        const ring = (today && c) ? `box-shadow:inset 0 0 0 2px ${GREEN};` : '';
+        const dots = evs.slice(1, 4).map(e => `<div class="mdot" style="background:${e.color}"></div>`).join('');
+        return `<div class="mcell">
+          <div class="mnum" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>
+          <div class="mdots">${dots}</div></div>`;
+      }).join('');
+      const firstDay = slice.filter(x => x)[0];
+      row.onclick = () => { V.week = startOfWeek(new Date(V.y, V.m, firstDay)); go('hafta', 'zin'); };
+      rows.appendChild(row);
+    }
+    frag.appendChild(box);
+
+    const up = upcoming(8);
+    const hd = h(`<div class="sechd"><div class="t">Yaklaşan</div><button class="a">Haftayı aç</button></div>`);
+    hd.querySelector('.a').onclick = () => { V.week = startOfWeek(TODAY); go('hafta', 'zin'); };
+    frag.appendChild(hd);
+    const list = document.createElement('div'); list.className = 'prev';
+    if (!up.length) {
+      list.innerHTML = '<div class="empty">Önümüzdeki 30 günde kayıt yok.<br>Sağ üstteki + ile ekle.</div>';
+    } else {
+      up.forEach(e => {
+        const dt = parseISO(e.date);
+        const when = (sameDay(dt, TODAY) ? 'Bugün' : sameDay(dt, addDays(TODAY, 1)) ? 'Yarın' : `${dt.getDate()} ${SHORT[dt.getMonth()]} ${DOW[dowMon(dt)]}`) + (e.time ? ' · ' + e.time : '');
+        const b = document.createElement('button'); b.className = 'pcard';
+        b.innerHTML = `<div class="pbar" style="background:${e.color}"></div>
+          <div style="flex:1;min-width:0"><div class="pttl">${esc(e.text)}</div><div class="pwhen">${when}</div></div>
+          <div class="tnum" style="font-size:13px;font-weight:600;color:${amountColor(e)}">${amountLabel(e)}</div>`;
+        b.onclick = () => openSheet(e, e.date);
+        list.appendChild(b);
+      });
+    }
+    frag.appendChild(list);
+    return frag;
+  }
+  function upcoming(limit) {
+    const out = [];
+    for (let i = 0; i < 31 && out.length < limit; i++) {
+      const dt = addDays(TODAY, i);
+      dayEvents(dt.getFullYear(), dt.getMonth(), dt.getDate()).forEach(e => out.push(e));
+    }
+    return out.slice(0, limit);
+  }
+
+  /* ---------------- hafta ---------------- */
+  function viewWeek() {
+    const wrap = document.createElement('div');
+    wrap.className = 'wrap ' + V.anim;
+    for (let i = 0; i < 7; i++) {
+      const dt = addDays(V.week, i);
+      const evs = dayEvents(dt.getFullYear(), dt.getMonth(), dt.getDate());
+      const today = sameDay(dt, TODAY);
+      const day = document.createElement('div'); day.className = 'wday';
+      day.innerHTML = `<div class="wleft">
+          <div class="wdow">${DOW[i]}</div>
+          <div class="wnum" style="color:${today ? '#f6f5f2' : INK};background:${today ? GREEN : 'transparent'}">${dt.getDate()}</div>
+        </div><div class="wright"></div>`;
+      const right = day.querySelector('.wright');
+      evs.forEach(e => {
+        const b = document.createElement('button'); b.className = 'ev';
+        b.innerHTML = `<div class="ev-c" style="background:${e.color}"></div>
+          <div class="ev-t tnum">${esc(e.time || '—')}</div>
+          <div class="ev-n">${esc(e.text)}</div>
+          <div class="ev-a tnum" style="color:${amountColor(e)}">${amountLabel(e)}</div>`;
+        b.onclick = () => openSheet(e, e.date);
+        right.appendChild(b);
+      });
+      const add = document.createElement('button'); add.className = 'addline';
+      add.textContent = '+ ekle';
+      add.onclick = () => openSheet(null, dkey(dt));
+      right.appendChild(add);
+      wrap.appendChild(day);
+    }
+    return wrap;
+  }
+
+  /* ---------------- P&L ---------------- */
+  function renderPnl() {
+    const y = V.pnlY, m = V.pnlM;
+    const inMonth = e => e.date.slice(0, 7) === y + '-' + pad(m + 1);
+    const t = S.totals(inMonth);
+    const yt = S.totals(e => e.date.slice(0, 4) === String(y));
+    const list = S.data.events.filter(e => (e.amtType === 'inc' || e.amtType === 'exp') && inMonth(e))
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+
+    setTitle(MONTHS[m], () => openMonthPick('pnl'));
+    $('mTitle').classList.remove('sm');
+    setKicker(`${y} · ${list.length} hareket`);
+    $('mZoom').style.display = 'none';
+    navPair(step);
+    $('mAdd').onclick = () => openSheet(null, defaultDate(), 'exp');
+
+    const sc = $('mScroll');
+    sc.innerHTML = '';
+    const box = document.createElement('div'); box.className = 'zin';
+    box.innerHTML = `
+      <div class="hero">
+        <div class="hero-l">${MONTHS[m]} · net</div>
+        <div class="hero-big tnum">${fmt(t.net)}</div>
+        <div class="hero-g">
+          <div><div class="k">Gelir</div><div class="v tnum">${fmt(t.inc)}</div></div>
+          <div><div class="k">Gider</div><div class="v tnum">${fmt(t.exp)}</div></div>
+        </div>
+      </div>
+      <div class="sechd"><div class="t">Hareketler</div><div class="a">${y} net · ${fmt(yt.net)}</div></div>`;
+    sc.appendChild(box);
+
+    if (!list.length) {
+      sc.appendChild(h('<div class="empty">Bu ayda tutarlı kayıt yok.<br>Kayıt eklerken “Tutar” alanından Gider ya da Gelir seç.</div>'));
+    } else {
+      const ul = document.createElement('div'); ul.className = 'list';
+      list.forEach(e => {
+        const c = S.cat(e.cat).color;
+        const dt = parseISO(e.date);
+        const b = document.createElement('button'); b.className = 'li';
+        b.innerHTML = `<div class="li-d" style="background:${c}">${dt.getDate()}</div>
+          <div style="flex:1;min-width:0"><div class="li-n">${esc(e.text)}</div>
+          <div class="li-s">${SHORT[dt.getMonth()]} · ${esc(e.time || '—')}</div></div>
+          <div class="li-a tnum" style="color:${amountColor(e)}">${amountLabel(e)}</div>`;
+        b.onclick = () => openSheet(Object.assign({}, e, { color: c }), e.date);
+        ul.appendChild(b);
+      });
+      sc.appendChild(ul);
+    }
+    const g = document.createElement('button'); g.className = 'ghost';
+    g.textContent = 'Ayarlar ve eşitleme';
+    g.onclick = openSettings;
+    sc.appendChild(g);
+    sc.scrollTop = 0;
+    hideHint();
+  }
+
+  /* ---------------- sheet altyapısı ---------------- */
+  let sheetOpen = false;
+  function closeSheet() { $('mSheetHost').innerHTML = ''; sheetOpen = false; }
+  function sheet(inner) {
+    sheetOpen = true;
+    const host = $('mSheetHost');
+    host.innerHTML = '';
+    const scrim = document.createElement('div'); scrim.className = 'scrim';
+    const sp = document.createElement('div'); sp.style.flex = '1'; sp.onclick = closeSheet;
+    const s = document.createElement('div'); s.className = 'sheet';
+    s.appendChild(inner);
+    scrim.appendChild(sp); scrim.appendChild(s);
+    host.appendChild(scrim);
+    return s;
+  }
+  let toastT = null;
+  function toast(msg) {
+    const host = $('mToastHost');
+    host.innerHTML = `<div class="toast">${esc(msg)}</div>`;
+    clearTimeout(toastT);
+    toastT = setTimeout(() => host.innerHTML = '', 1900);
+  }
+  let hintT = null, hintSeen = +(localStorage.getItem('ajanda_hint') || 0);
+  function showHint(txt) {
+    if (hintSeen > 3) { hideHint(); return; }
+    const el = $('mHint'); el.textContent = txt; el.style.opacity = '1';
+    clearTimeout(hintT);
+    hintT = setTimeout(() => { el.style.opacity = '0'; }, 3800);
+  }
+  function hideHint() { const el = $('mHint'); if (el) el.style.opacity = '0'; clearTimeout(hintT); }
+  function bumpHint() { hintSeen++; try { localStorage.setItem('ajanda_hint', hintSeen); } catch (e) { } hideHint(); }
+
+  /* ---------------- kayıt sheet'i ---------------- */
+  function openSheet(ev, date, forceKind) {
+    const editing = !!ev;
+    let dr = {
+      title: ev ? ev.text : '',
+      date: ev ? ev.date : date,
+      time: ev ? (ev.time || '10:00') : '10:00',
+      amount: ev && ev.amt ? String(ev.amt) : '',
+      kind: ev ? (ev.amtType || 'none') : (forceKind || 'none'),
+      cat: ev ? ev.cat : 'mavi'
+    };
+    const box = document.createElement('div');
+    const draw = () => {
+      const color = S.cat(dr.cat).color;
+      box.innerHTML = `
+      <div class="grab"></div>
+      <div class="sh-h"><div class="sh-t">${editing ? 'Kaydı düzenle' : 'Yeni kayıt'}</div><button class="sh-x">Vazgeç</button></div>
+      <div class="field">
+        <input class="inp" id="fTitle" placeholder="Ne yapacaksın?" value="${S.escAttr(dr.title)}">
+        <div class="div"></div>
+        <div class="frow">
+          <input type="date" class="flab" id="fDate" value="${dr.date}" style="border:0;background:transparent;outline:none;font-weight:600">
+          <input class="mini tnum" id="fTime" type="time" value="${dr.time}">
+        </div>
+      </div>
+      <div class="lab">Tutar</div>
+      <div class="seg" id="fKind">
+        <button data-k="none" class="${dr.kind === 'none' ? 'on' : ''}">Yok</button>
+        <button data-k="exp" class="${dr.kind === 'exp' ? 'on' : ''}">Gider</button>
+        <button data-k="inc" class="${dr.kind === 'inc' ? 'on' : ''}">Gelir</button>
+      </div>
+      <div class="field" style="${dr.kind === 'none' ? 'display:none' : ''}">
+        <div class="frow">
+          <input class="inp" id="fAmount" inputmode="decimal" placeholder="0" value="${S.escAttr(dr.amount)}" style="flex:1;font-size:20px">
+          <span style="font-size:16px;font-weight:700;color:var(--m5)">€</span>
+        </div>
+      </div>
+      <div class="lab">Renk</div>
+      <div class="pal" id="fPal">${S.data.cats.map(c => `<button data-c="${c.id}" class="${c.id === dr.cat ? 'on' : ''}">
+          <div class="sw" style="background:${c.color};box-shadow:${c.id === dr.cat ? '0 0 0 2.5px ' + INK : 'inset 0 0 0 1px rgba(27,26,24,.08)'}"></div>
+          <div class="nm">${esc(c.name)}</div></button>`).join('')}</div>
+      <button class="save" id="fSave" style="background:${color}">Kaydet</button>
+      ${editing ? '<button class="del" id="fDel">Kaydı sil</button>' : ''}
+      <div class="note">Yıl görünümünde o gün bu renkle işaretlenir</div>`;
+
+      box.querySelector('.sh-x').onclick = closeSheet;
+      const grab = () => {
+        dr.title = box.querySelector('#fTitle').value;
+        dr.date = box.querySelector('#fDate').value || dr.date;
+        dr.time = box.querySelector('#fTime').value || '10:00';
+        const a = box.querySelector('#fAmount');
+        if (a) dr.amount = a.value;
+      };
+      box.querySelector('#fKind').querySelectorAll('button').forEach(b => b.onclick = () => { grab(); dr.kind = b.dataset.k; draw(); });
+      box.querySelector('#fPal').querySelectorAll('button').forEach(b => b.onclick = () => { grab(); dr.cat = b.dataset.c; draw(); });
+      box.querySelector('#fSave').onclick = () => { grab(); commit(); };
+      const del = box.querySelector('#fDel');
+      if (del) del.onclick = () => { S.deleteEvent(ev.id); closeSheet(); render(); toast('Kayıt silindi'); };
+    };
+    const commit = () => {
+      if (!dr.title.trim()) dr.title = S.cat(dr.cat).name;
+      const payload = {
+        date: dr.date, time: dr.time, text: dr.title.trim(), cat: dr.cat,
+        amtType: dr.kind, amt: dr.kind === 'none' ? 0 : parseAmount(dr.amount)
+      };
+      if (editing) S.updateEvent(ev.id, payload); else S.addEvent(payload);
+      closeSheet();
+      const dt = parseISO(dr.date);
+      if (V.tab === 'ajanda') {
+        V.y = dt.getFullYear();
+        if (V.level === 'hafta') V.week = startOfWeek(dt); else V.m = dt.getMonth();
+      } else { V.pnlY = dt.getFullYear(); V.pnlM = dt.getMonth(); }
+      render(); toast(editing ? 'Güncellendi' : 'Eklendi');
+    };
+    draw();
+    sheet(box);
+    setTimeout(() => { const t = box.querySelector('#fTitle'); if (t && !editing) t.focus(); }, 280);
+  }
+  function parseAmount(s) {
+    if (!s) return 0;
+    const n = parseFloat(String(s).replace(/\s|€/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.'));
+    return isNaN(n) ? 0 : Math.abs(n);
+  }
+
+  /* ---------------- yıl / ay seçici ---------------- */
+  function openYearPick() {
+    const box = document.createElement('div');
+    const cur = TODAY.getFullYear();
+    const years = []; for (let i = -3; i <= 6; i++) years.push(cur + i);
+    box.innerHTML = `<div class="grab"></div>
+      <div class="sh-h"><div class="sh-t">Yıl seç</div><button class="sh-x">Vazgeç</button></div>
+      <div class="pick">${years.map(y => `<button data-y="${y}" class="${y === V.y ? 'on' : ''} ${y === cur ? 'now' : ''}">${y}</button>`).join('')}</div>
+      <div class="note">Yeşil çerçeveli olan içinde bulunduğun yıl.</div>`;
+    box.querySelector('.sh-x').onclick = closeSheet;
+    box.querySelectorAll('.pick button').forEach(b => b.onclick = () => {
+      V.y = +b.dataset.y; closeSheet(); V.anim = 'zin'; render();
+    });
+    sheet(box);
+  }
+  function openMonthPick(which) {
+    const box = document.createElement('div');
+    let year = which === 'pnl' ? V.pnlY : V.y;
+    const draw = () => {
+      const selM = which === 'pnl' ? V.pnlM : V.m;
+      const selY = which === 'pnl' ? V.pnlY : V.y;
+      box.innerHTML = `<div class="grab"></div>
+        <div class="sh-h"><div class="sh-t">Ay seç</div><button class="sh-x">Vazgeç</button></div>
+        <div class="yhead">
+          <button id="yPrev">${SVG.left}</button>
+          <div class="y tnum">${year}</div>
+          <button id="yNext">${SVG.right}</button>
+        </div>
+        <div class="pick">${MONTHS.map((n, i) => {
+        const on = (i === selM && year === selY);
+        const now = (i === TODAY.getMonth() && year === TODAY.getFullYear());
+        return `<button data-m="${i}" class="${on ? 'on' : ''} ${now ? 'now' : ''}">${SHORT[i]}</button>`;
+      }).join('')}</div>
+        <div class="note">Yeşil çerçeveli olan içinde bulunduğun ay.</div>`;
+      box.querySelector('.sh-x').onclick = closeSheet;
+      box.querySelector('#yPrev').onclick = () => { year--; draw(); };
+      box.querySelector('#yNext').onclick = () => { year++; draw(); };
+      box.querySelectorAll('.pick button').forEach(b => b.onclick = () => {
+        const m = +b.dataset.m;
+        if (which === 'pnl') { V.pnlY = year; V.pnlM = m; }
+        else { V.y = year; V.m = m; V.level = 'ay'; V.anim = 'zin'; }
+        closeSheet(); render();
+      });
+    };
+    draw(); sheet(box);
+  }
+
+  /* ---------------- ayarlar ---------------- */
+  function openSettings() {
+    const box = document.createElement('div');
+    const draw = () => {
+      const c = S.cfg(), st = S.status;
+      box.innerHTML = `<div class="grab"></div>
+        <div class="sh-h"><div class="sh-t">Ayarlar</div><button class="sh-x">Vazgeç</button></div>
+        <div class="lab">Eşitleme</div>
+        <div class="field">
+          <input class="inp" id="sTok" type="password" autocomplete="off" placeholder="GitHub token (gist yetkisi)" value="${S.escAttr(c.token)}">
+          <div class="div"></div>
+          <input class="inp" id="sGist" autocomplete="off" placeholder="Gist ID" value="${S.escAttr(c.gist)}">
+        </div>
+        <button class="save" id="sSave" style="background:${GREEN};color:#fff">Kaydet ve eşitle</button>
+        <div class="note">${esc(st.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
+        <div class="lab">Yedek</div>
+        <button class="ghost" id="sExp">Yedeği indir</button>
+        <label class="ghost" style="cursor:pointer">Yedek yükle<input type="file" accept="application/json" id="sImp" style="display:none"></label>
+        <div class="note">Kayıtlar telefonda saklanır; GitHub üzerinden bilgisayarla eşitlenir.</div>`;
+      box.querySelector('.sh-x').onclick = closeSheet;
+      box.querySelector('#sSave').onclick = () => {
+        S.setCfg({ token: box.querySelector('#sTok').value.trim(), gist: box.querySelector('#sGist').value.trim() });
+        S.sync().then(ok => { toast(ok ? 'Eşitlendi' : S.status.text); draw(); });
+      };
+      box.querySelector('#sExp').onclick = () => S.exportJSON();
+      box.querySelector('#sImp').onchange = function () {
+        const f = this.files && this.files[0]; if (!f) return;
+        const r = new FileReader();
+        r.onload = () => {
+          try { const n = S.importJSON(r.result); closeSheet(); render(); toast(n + ' kayıt yüklendi'); }
+          catch (e) { toast('Yedek okunamadı'); }
+        };
+        r.readAsText(f); this.value = '';
+      };
+    };
+    draw(); sheet(box);
+  }
+
+  /* ---------------- jestler ---------------- */
+  let lock = 0, gesturesBound = false;
+  function canZoom() { return V.tab === 'ajanda' && !sheetOpen; }
+  function zoomOut() {
+    if (V.level === 'hafta') { V.m = V.week.getMonth(); V.y = V.week.getFullYear(); go('ay', 'zout'); }
+    else if (V.level === 'ay') go('yil', 'zout');
+  }
+  function zoomIn() {
+    if (V.level === 'yil') { V.m = (V.y === TODAY.getFullYear()) ? TODAY.getMonth() : 0; go('ay', 'zin'); }
+    else if (V.level === 'ay') {
+      const inThis = V.y === TODAY.getFullYear() && V.m === TODAY.getMonth();
+      V.week = startOfWeek(inThis ? TODAY : new Date(V.y, V.m, 1)); go('hafta', 'zin');
+    }
+  }
+  function bindGestures() {
+    if (gesturesBound) return;
+    gesturesBound = true;
+    const sc = $('mScroll');
+    sc.addEventListener('wheel', e => {
+      if (!canZoom()) return;
+      const now = Date.now(); if (now - lock < 650) return;
+      if (e.deltaY < -18 && sc.scrollTop <= 2) { lock = now; bumpHint(); zoomOut(); }
+      else if (e.deltaY > 18 && sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 3) { lock = now; bumpHint(); zoomIn(); }
+    }, { passive: true });
+
+    let tY = 0, tActive = false, sx = 0, sy = 0, sw = false;
+    sc.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) return;
+      tY = e.touches[0].clientY; tActive = true;
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; sw = true;
+    }, { passive: true });
+    sc.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - sx, dyH = e.changedTouches[0].clientY - sy;
+      if (sw && !sheetOpen && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dyH) * 1.8) {
+        sw = false; tActive = false; step(dx < 0 ? 1 : -1); return;
+      }
+      sw = false;
+      if (!tActive || !canZoom()) return; tActive = false;
+      const now = Date.now(); if (now - lock < 650) return;
+      const dy = e.changedTouches[0].clientY - tY;
+      const atTop = sc.scrollTop <= 2;
+      const atBot = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 3;
+      if (dy > 90 && atTop) { lock = now; bumpHint(); zoomOut(); }
+      else if (dy < -90 && atBot) { lock = now; bumpHint(); zoomIn(); }
+    }, { passive: true });
+
+    document.addEventListener('keydown', e => {
+      if (document.body.dataset.ui !== 'mobile') return;
+      if (sheetOpen) { if (e.key === 'Escape') closeSheet(); return; }
+      if (e.target.matches && e.target.matches('input,select,textarea')) return;
+      if (e.key === 'ArrowLeft') step(-1);
+      else if (e.key === 'ArrowRight') step(1);
+      else if (e.key === 'ArrowUp') zoomOut();
+      else if (e.key === 'ArrowDown') zoomIn();
+      else if (e.key === 'n' || e.key === 'N') $('mAdd').click();
+    });
+  }
+
+  /* ---------------- montaj ---------------- */
   function mount() {
     if (!document.getElementById('mobile-css')) {
       const s = document.createElement('style'); s.id = 'mobile-css'; s.textContent = CSS;
       document.head.appendChild(s);
     }
-    if (!M) init();
-    window.MB = MB;
+    if (!V) initState();
+    buildShell();
     render();
   }
 
-  return { mount: mount, render: () => { if (M) render(); } };
+  return {
+    mount: mount,
+    render: () => { if (V && document.getElementById('mScroll')) render(); }
+  };
 })();
