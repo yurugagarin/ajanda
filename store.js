@@ -11,27 +11,64 @@ var Store = (function () {
   const GIST_FILE = 'ajanda.json';
 
   /* ---------- sabitler ---------- */
+  /* 10 renk — her rengin bir anlamı var, kategoriler bu renkleri kullanır */
   const PALETTE = [
-    { id: 'kirmizi', name: 'Kırmızı', color: '#B65449' },
-    { id: 'turuncu', name: 'Turuncu', color: '#C97F4E' },
-    { id: 'kehribar', name: 'Kehribar', color: '#C1913F' },
-    { id: 'sari', name: 'Sarı', color: '#C2AE58' },
-    { id: 'fistik', name: 'Fıstık', color: '#8C9B57' },
-    { id: 'yesil', name: 'Yeşil', color: '#5F9269' },
-    { id: 'zumrut', name: 'Zümrüt', color: '#4A8A75' },
-    { id: 'turkuaz', name: 'Turkuaz', color: '#4A8E91' },
-    { id: 'camgobegi', name: 'Camgöbeği', color: '#5590AE' },
-    { id: 'mavi', name: 'Mavi', color: '#5F81AC' },
-    { id: 'lacivert', name: 'Lacivert', color: '#5A6493' },
-    { id: 'mor', name: 'Mor', color: '#8672A6' },
-    { id: 'erguvan', name: 'Erguvan', color: '#9A6295' },
-    { id: 'pembe', name: 'Pembe', color: '#C0768F' },
-    { id: 'bordo', name: 'Bordo', color: '#8D5566' },
-    { id: 'kahve', name: 'Kahve', color: '#8A6754' },
-    { id: 'kum', name: 'Kum', color: '#AD9877' },
-    { id: 'komur', name: 'Kömür', color: '#6F6B67' }
+    { id: 'kirmizi', name: 'Kırmızı', color: '#C25A4E' },
+    { id: 'turuncu', name: 'Turuncu', color: '#D08A4E' },
+    { id: 'sari', name: 'Sarı', color: '#D9B44A' },
+    { id: 'yesil', name: 'Yeşil', color: '#6C9E6E' },
+    { id: 'turkuaz', name: 'Turkuaz', color: '#4E9A95' },
+    { id: 'mavi', name: 'Mavi', color: '#5E86B0' },
+    { id: 'mor', name: 'Mor', color: '#8A72A8' },
+    { id: 'pembe', name: 'Pembe', color: '#C57E96' },
+    { id: 'kahve', name: 'Kahve', color: '#8C6B52' },
+    { id: 'gri', name: 'Gri', color: '#8A8781' }
   ];
-  const PALETTE_VERSION = 4;
+  const COLOR = {};
+  PALETTE.forEach(p => COLOR[p.id] = p.color);
+
+  /* varsayılan kategoriler — kullanıcı ekleyip çıkarabilir */
+  const DEFAULT_CATS = [
+    { id: 'genel', name: 'Genel', color: COLOR.gri },
+    { id: 'sosyal', name: 'Sosyal', color: COLOR.sari },
+    { id: 'seyahat', name: 'Seyahat', color: COLOR.mavi },
+    { id: 'is', name: 'İş', color: COLOR.kahve },
+    { id: 'sirket', name: 'Şirket', color: COLOR.turuncu },
+    { id: 'izin', name: 'İzin', color: COLOR.turkuaz },
+    { id: 'tatil', name: 'Tatil', color: COLOR.yesil },
+    { id: 'maas', name: 'Maaş', color: COLOR.yesil },
+    { id: 'kapanis', name: 'Kapanış', color: COLOR.kirmizi },
+    { id: 'almanca', name: 'Almanca kursu', color: COLOR.mor }
+  ];
+  const CAT_VERSION = 5;
+
+  /* eski 18 renkli düzenden kategoriye geçiş haritası */
+  const OLD_PAL_TO_CAT = {
+    kirmizi: 'kapanis', bordo: 'kapanis', turuncu: 'sirket', kehribar: 'sirket',
+    kahve: 'is', kum: 'genel', komur: 'genel', gri: 'genel', sari: 'sosyal',
+    fistik: 'maas', yesil: 'tatil', zumrut: 'tatil', turkuaz: 'izin',
+    camgobegi: 'seyahat', mavi: 'genel', lacivert: 'seyahat', mor: 'almanca',
+    erguvan: 'almanca', pembe: 'sosyal'
+  };
+  const OLD_PAL_NAMES = {
+    kirmizi: 'Kırmızı', turuncu: 'Turuncu', kehribar: 'Kehribar', sari: 'Sarı',
+    fistik: 'Fıstık', yesil: 'Yeşil', zumrut: 'Zümrüt', turkuaz: 'Turkuaz',
+    camgobegi: 'Camgöbeği', mavi: 'Mavi', lacivert: 'Lacivert', mor: 'Mor',
+    erguvan: 'Erguvan', pembe: 'Pembe', bordo: 'Bordo', kahve: 'Kahve',
+    kum: 'Kum', komur: 'Kömür', gri: 'Gri'
+  };
+  function nearestColor(hex) {
+    const h = String(hex || '').replace('#', '');
+    if (h.length !== 6) return COLOR.gri;
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    let best = COLOR.gri, bd = 1e9;
+    PALETTE.forEach(p => {
+      const q = p.color.replace('#', '');
+      const d = Math.pow(r - parseInt(q.slice(0, 2), 16), 2) + Math.pow(g - parseInt(q.slice(2, 4), 16), 2) + Math.pow(b - parseInt(q.slice(4, 6), 16), 2);
+      if (d < bd) { bd = d; best = p.color; }
+    });
+    return best;
+  }
 
   const DEFAULT_HABITS = [
     { id: 'h_spor', name: 'Spor', icon: '🏋️', color: '#E5813C', pinned: true, hidden: false },
@@ -70,8 +107,8 @@ var Store = (function () {
   /* ---------- boş veri ---------- */
   function blank() {
     return {
-      v: 3, pv: PALETTE_VERSION,
-      cats: PALETTE.map((p, i) => ({ id: p.id, name: p.name, color: p.color, o: i, mt: 0 })),
+      v: 3, cv: CAT_VERSION,
+      cats: DEFAULT_CATS.map((c, i) => ({ id: c.id, name: c.name, color: c.color, o: i, mt: 0 })),
       events: [],
       habits: DEFAULT_HABITS.map(h => Object.assign({}, h)),
       habitsMt: 0,
@@ -82,7 +119,7 @@ var Store = (function () {
   }
 
   /* ---------- eski (tek dosyalık ajanda) formatından taşıma ---------- */
-  const OLD_CAT_MAP = { genel: 'mavi', is: 'turuncu', yuzme: 'camgobegi', turkishnight: 'sari', maas: 'fistik', tatil: 'zumrut', seyahat: 'mor', sosyal: 'pembe' };
+  const OLD_CAT_MAP = { genel: 'genel', is: 'is', yuzme: 'genel', turkishnight: 'sosyal', maas: 'maas', tatil: 'tatil', seyahat: 'seyahat', sosyal: 'sosyal' };
 
   function fromLegacy(raw, into) {
     const D = into || blank();
@@ -93,7 +130,7 @@ var Store = (function () {
       const target = OLD_CAT_MAP[c.id];
       if (target && catIdx[target]) { catIdx[target].name = c.name; catIdx[target].mt = now(); }
       else if (!catIdx[c.id]) {
-        const nc = { id: c.id, name: c.name, color: c.color || '#5a5a5a', o: D.cats.length, mt: now() };
+        const nc = { id: c.id, name: c.name, color: nearestColor(c.color), o: D.cats.length, mt: now() };
         D.cats.push(nc); catIdx[c.id] = nc;
       }
     });
@@ -103,7 +140,7 @@ var Store = (function () {
       if (have[e.id]) return;
       D.events.push({
         id: e.id || uid(), date: e.date, time: e.time || '', text: e.text || '',
-        cat: OLD_CAT_MAP[e.cat] || e.cat || 'mavi',
+        cat: OLD_CAT_MAP[e.cat] || e.cat || 'genel',
         amtType: 'none', amt: 0, mt: e.mt || 1
       });
     });
@@ -127,7 +164,9 @@ var Store = (function () {
   }
 
   function normalize(d) {
+    const rawCv = d && d.cv;
     const D = Object.assign(blank(), d || {});
+    if (d) D.cv = rawCv;
     if (!Array.isArray(D.cats) || !D.cats.length) D.cats = blank().cats;
     if (!Array.isArray(D.events)) D.events = [];
     if (!Array.isArray(D.habits) || !D.habits.length) D.habits = blank().habits;
@@ -135,16 +174,39 @@ var Store = (function () {
     if (!D.deleted || typeof D.deleted !== 'object') D.deleted = {};
     if (!D.countdown || typeof D.countdown !== 'object') D.countdown = { v: '', mt: 0 };
     D.events = D.events.map(e => Object.assign({ time: '', note: '', amtType: 'none', amt: 0, mt: 1 }, e));
-    // eksik palet renklerini tamamla
+    if (D.cv !== CAT_VERSION) migrateCats(D);
+    /* varsayılan kategoriler eksikse tamamla (silinmemişse) */
     const has = {}; D.cats.forEach(c => has[c.id] = 1);
-    PALETTE.forEach((p, i) => { if (!has[p.id]) D.cats.push({ id: p.id, name: p.name, color: p.color, o: i, mt: 0 }); });
-    // palet sürümü: renk tonları güncellendiyse adları koruyup renkleri yenile
-    if (D.pv !== PALETTE_VERSION) {
-      const pm = {}; PALETTE.forEach(p => pm[p.id] = p.color);
-      D.cats = D.cats.map(c => pm[c.id] ? Object.assign({}, c, { color: pm[c.id] }) : c);
-      D.pv = PALETTE_VERSION;
-    }
+    DEFAULT_CATS.forEach((c, i) => { if (!has[c.id] && !D.deleted[c.id]) D.cats.push({ id: c.id, name: c.name, color: c.color, o: i, mt: 0 }); });
+    /* kategorisi kaybolan kayıtları Genel'e al */
+    const live = {}; D.cats.forEach(c => live[c.id] = 1);
+    D.events = D.events.map(e => live[e.cat] ? e : Object.assign({}, e, { cat: 'genel' }));
     return D;
+
+  }
+
+  /* 18 renkli düzenden kategori düzenine geçiş */
+  function migrateCats(D) {
+    const out = DEFAULT_CATS.map((c, i) => ({ id: c.id, name: c.name, color: c.color, o: i, mt: 0 }));
+    const byId = {}; out.forEach(c => byId[c.id] = 1);
+    (D.cats || []).forEach(c => {
+      if (byId[c.id]) return;
+      if (OLD_PAL_TO_CAT[c.id]) {
+        /* kullanıcı bu renge kendi adını verdiyse ayrı kategori olarak korunur */
+        if (c.name && c.name !== OLD_PAL_NAMES[c.id]) {
+          const target = OLD_PAL_TO_CAT[c.id];
+          const t = out.filter(x => x.id === target)[0];
+          out.push({ id: c.id, name: c.name, color: (t ? t.color : nearestColor(c.color)), o: out.length, mt: now() });
+          byId[c.id] = 1;
+        }
+      } else {
+        out.push({ id: c.id, name: c.name, color: nearestColor(c.color), o: out.length, mt: now() });
+        byId[c.id] = 1;
+      }
+    });
+    D.cats = out;
+    D.events = (D.events || []).map(e => byId[e.cat] ? e : Object.assign({}, e, { cat: OLD_PAL_TO_CAT[e.cat] || 'genel' }));
+    D.cv = CAT_VERSION;
   }
 
   /* ---------- yükle / kaydet ---------- */
@@ -191,7 +253,9 @@ var Store = (function () {
     const cm = {};
     a.cats.forEach(c => cm[c.id] = c);
     b.cats.forEach(c => { const x = cm[c.id]; if (!x || (c.mt || 0) > (x.mt || 0)) cm[c.id] = c; });
-    out.cats = Object.keys(cm).map(k => cm[k]).sort((x, y) => (x.o || 0) - (y.o || 0));
+    out.cats = Object.keys(cm).map(k => cm[k])
+      .filter(c => !(out.deleted[c.id] && out.deleted[c.id] >= (c.mt || 0)))
+      .sort((x, y) => (x.o || 0) - (y.o || 0));
 
     if ((b.habitsMt || 0) > (a.habitsMt || 0)) { out.habits = b.habits; out.habitsMt = b.habitsMt || 0; }
     else { out.habits = a.habits; out.habitsMt = a.habitsMt || 0; }
@@ -274,8 +338,28 @@ var Store = (function () {
     commit();
   }
   function addCat(name, color) {
-    D.cats.push({ id: uid('c'), name: name || 'Yeni', color: color || '#5a5a5a', o: D.cats.length, mt: now() });
+    const c = { id: uid('c'), name: (name || 'Yeni kategori'), color: color || COLOR.gri, o: D.cats.length, mt: now() };
+    D.cats.push(c); commit();
+    return c;
+  }
+  function deleteCat(id) {
+    if (D.cats.length <= 1) return 0;
+    const n = D.events.filter(e => e.cat === id).length;
+    D.events = D.events.map(e => e.cat === id ? Object.assign({}, e, { cat: 'genel', mt: now() }) : e);
+    D.cats = D.cats.filter(c => c.id !== id);
+    D.deleted[id] = now();
     commit();
+    return n;
+  }
+  /* kategori bazında sayım — lejant ve filtre için */
+  function catUsage() {
+    const n = {};
+    D.events.forEach(e => n[e.cat] = (n[e.cat] || 0) + 1);
+    return D.cats.map(c => ({ id: c.id, name: c.name, color: c.color, n: n[c.id] || 0 }))
+      .sort((a, b) => b.n - a.n || (a.o || 0) - (b.o || 0));
+  }
+  function eventsInCat(id) {
+    return D.events.filter(e => e.cat === id).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : byTime(a, b));
   }
   function setCountdown(v) { D.countdown = { v: v, mt: now() }; commit(); }
 
@@ -339,12 +423,7 @@ var Store = (function () {
   }
 
   /* ---------- renk kullanımı (sık kullanılan sırası) ---------- */
-  function colorUsage() {
-    const n = {};
-    D.events.forEach(e => n[e.cat] = (n[e.cat] || 0) + 1);
-    return D.cats.map(c => ({ id: c.id, name: c.name, color: c.color, n: n[c.id] || 0 }))
-      .sort((a, b) => b.n - a.n);
-  }
+
   /* seri (gid) günlerinin kümesi — bitişik gün şeridi çizmek için */
   function groupDays() {
     const m = {};
@@ -526,7 +605,7 @@ var Store = (function () {
       }
       dirty = false;
       setCfg({ last: now() });
-      status('ok', 'Eşitlendi ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }));
+      status(silent ? 'ok' : 'ok', 'Eşitlendi ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }));
       return true;
     } catch (e) {
       status('err', e.message || 'Eşitleme hatası');
@@ -550,7 +629,7 @@ var Store = (function () {
     catMap, habitMap, cat, eventsByDate, eventsOn, byTime,
     addEvent, addEvents, groupCount, deleteGroup, updateEvent, deleteEvent, updateCat, addCat, setCountdown,
     doneOn, toggleHabit, habitStreak, updateHabit, addHabit, deleteHabit,
-    totals, exportJSON, importJSON, collapse, spanLabel, colorUsage, groupDays, toICS, downloadICS, search, canUndo, undo,
+    totals, exportJSON, importJSON, collapse, spanLabel, catUsage, eventsInCat, deleteCat, COLOR, groupDays, toICS, downloadICS, search, canUndo, undo,
     cfg, setCfg, sync, createGist, startAuto,
     get status() { return statusState; }
   };

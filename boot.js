@@ -42,7 +42,6 @@
   }
 
   Store.on('change', rerender);
-  Store.on('status', rerender);
 
   let t = null;
   window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(mount, 200); });

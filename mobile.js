@@ -8,8 +8,6 @@ var MobileView = (function () {
   const S = Store;
   const MONTHS = S.MONTHS, SHORT = S.MONTHS_SHORT, DOW = S.WD_SHORT;
   const INK = '#1b1a18', GREEN = '#2f7a5b';
-  /* geçmiş günler: renk yerine soluk mürekkep */
-  const PAST_BG = 'rgba(27,26,24,.10)', PAST_FG = 'rgba(27,26,24,.40)', PAST_EMPTY = 'rgba(27,26,24,.22)';
 
   const CSS = `
 body[data-ui="mobile"]{margin:0;background:#eceae5;display:flex;align-items:center;justify-content:center;
@@ -76,7 +74,6 @@ body[data-ui="mobile"] #app{
 
 .mob .wrap{display:flex;flex-direction:column;gap:14px;min-height:100%}
 .mob .wday{flex:1 0 auto;display:flex;gap:14px}
-.mob .wday.past{opacity:.5}
 .mob .wleft{width:46px;flex:none;text-align:center;padding-top:2px}
 .mob .wdow{font-size:10px;font-weight:600;color:rgba(27,26,24,.38);text-transform:uppercase;letter-spacing:.06em}
 .mob .wnum{margin:3px auto 0;width:30px;height:30px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700}
@@ -128,6 +125,14 @@ body[data-ui="mobile"] #app{
 .mob .flab{font-size:14px;font-weight:600;color:var(--m5);flex:1;min-width:0}
 .mob .mini{width:86px;text-align:center;border:0;border-radius:10px;background:var(--m1);padding:9px 4px;font-size:15px;font-weight:600;color:var(--ink);outline:none}
 .mob .lab{margin-top:18px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--m4)}
+.mob .cats{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}
+.mob .cats button{display:inline-flex;align-items:center;gap:7px;background:var(--card);border-radius:999px;padding:10px 14px;font-size:14px;font-weight:600;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.mob .cats button i{width:10px;height:10px;border-radius:999px;display:block}
+.mob .cats button.on{background:var(--ink);color:var(--paper)}
+.mob .flt{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:22px}
+.mob .flt .t{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700}
+.mob .flt .t i{width:11px;height:11px;border-radius:999px;display:block}
+.mob .flt button{all:unset;cursor:pointer;font-size:13px;font-weight:600;color:var(--green)}
 .mob .pal{margin-top:12px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px 6px;justify-items:center}
 .mob .pal button{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;min-width:0}
 .mob .pal .sw{width:42px;height:42px;border-radius:999px;flex:none}
@@ -308,22 +313,16 @@ body[data-ui="mobile"] #app{
     const todayD = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
     for (let m = 0; m < 12; m++) {
       const isCur = V.y === TODAY.getFullYear() && m === TODAY.getMonth();
-      const monthPast = new Date(V.y, m + 1, 0) < todayD;
+      const monthPast = false;
       const el = document.createElement('div'); el.className = 'ymo';
       let cells = '';
       for (let i = 0; i < firstDow(V.y, m); i++) cells += '<div class="ycell"></div>';
       for (let d = 1; d <= daysIn(V.y, m); d++) {
         const k = iso(V.y, m, d);
-        const today = k === TKEY, past = k < TKEY;
+        const today = k === TKEY;
         const evs = dayEvents(V.y, m, d);
         let bg = 'transparent', color = 'rgba(27,26,24,.42)', w = 400, ring = '';
-        if (past) {
-          color = evs.length ? PAST_FG : PAST_EMPTY;
-          bg = evs.length ? PAST_BG : 'transparent';
-          w = evs.length ? 600 : 400;
-        } else if (evs.length) {
-          bg = evs[0].color; color = '#fff'; w = 700;
-        }
+        if (evs.length) { bg = evs[0].color; color = '#fff'; w = 700; }
         if (today) {
           color = '#fff'; w = 700;
           bg = evs.length ? evs[0].color : INK;
@@ -345,9 +344,36 @@ body[data-ui="mobile"] #app{
     return frag;
   }
 
-  /* renk lejantı — dokununca o renk öne çıkar */
+  /* seçili kategorinin tüm kayıtları */
+  function catListEl() {
+    const c = S.cat(V.hl);
+    const items = S.collapse(S.eventsInCat(V.hl));
+    const box = document.createElement('div');
+    const hd = document.createElement('div'); hd.className = 'flt';
+    hd.innerHTML = `<div class="t"><i style="background:${c.color}"></i>${esc(c.name)} <span style="color:var(--m5);font-weight:600">${items.length}</span></div>`;
+    const x = document.createElement('button'); x.textContent = 'Kapat';
+    x.onclick = () => { V.hl = null; render(); };
+    hd.appendChild(x);
+    box.appendChild(hd);
+    const list = document.createElement('div'); list.className = 'prev';
+    if (!items.length) list.innerHTML = '<div class="empty">Bu kategoride kayıt yok.</div>';
+    items.forEach(it => {
+      const e = it.ev, p = S.parseKey(it.first);
+      const b = document.createElement('button'); b.className = 'pcard';
+      b.style.opacity = it.last < TKEY ? '.55' : '1';
+      b.innerHTML = `<div class="pbar" style="background:${c.color}"></div>
+        <div style="flex:1;min-width:0"><div class="pttl">${esc(e.text)}</div>
+        <div class="pwhen">${S.spanLabel(it)}${it.contiguous && it.count > 1 ? ' · ' + it.count + ' gün' : ''} · ${p.y}${e.time ? ' · ' + e.time : ''}</div></div>`;
+      b.onclick = () => openSheet(e, e.date);
+      list.appendChild(b);
+    });
+    box.appendChild(list);
+    return box;
+  }
+
+  /* kategori şeridi — dokununca sadece o kategori */
   function legendEl() {
-    const use = S.colorUsage().filter(c => c.n);
+    const use = S.catUsage().filter(c => c.n);
     if (!use.length) return null;
     const box = document.createElement('div');
     box.className = 'legend';
@@ -378,22 +404,15 @@ body[data-ui="mobile"] #app{
       const hasToday = isCur && slice.indexOf(TODAY.getDate()) >= 0;
       const row = document.createElement('div');
       row.className = 'mrow';
-      row.style.background = hasToday ? 'rgba(47,122,91,.08)' : 'transparent';
+      row.style.background = 'transparent';
       row.innerHTML = slice.map(d => {
         if (!d) return '<div class="mcell"></div>';
         const k = iso(V.y, V.m, d);
-        const today = k === TKEY, past = k < TKEY;
+        const today = k === TKEY;
         const evs = dayEvents(V.y, V.m, d);
         let bg = 'transparent', color = 'rgba(27,26,24,.85)', w = 500, ring = '';
-        let dotCols = evs.slice(1, 4).map(e => e.color);
-        if (past) {
-          color = evs.length ? PAST_FG : PAST_EMPTY;
-          bg = evs.length ? PAST_BG : 'transparent';
-          w = evs.length ? 600 : 500;
-          dotCols = dotCols.map(() => 'rgba(27,26,24,.18)');
-        } else if (evs.length) {
-          bg = evs[0].color; color = '#fff'; w = 700;
-        }
+        const dotCols = evs.slice(1, 4).map(e => e.color);
+        if (evs.length) { bg = evs[0].color; color = '#fff'; w = 700; }
         if (today) {
           color = '#fff'; w = 700;
           bg = evs.length ? evs[0].color : GREEN;
@@ -410,7 +429,7 @@ body[data-ui="mobile"] #app{
         }
         let band = '';
         if (bandCol) {
-          const bc = past ? 'rgba(27,26,24,.07)' : S.rgba(bandCol, .2);
+          const bc = S.rgba(bandCol, .2);
           const rl = bandL ? '0' : '999px', rr = bandR ? '0' : '999px';
           band = `background:${bc};border-radius:${rl} ${rr} ${rr} ${rl};`;
         }
@@ -425,6 +444,8 @@ body[data-ui="mobile"] #app{
       rows.appendChild(row);
     }
     frag.appendChild(box);
+
+    if (V.hl) { frag.appendChild(catListEl()); const lg0 = legendEl(); if (lg0) frag.appendChild(lg0); return frag; }
 
     const up = upcoming(8);
     const hd = h(`<div class="sechd"><div class="t">Yaklaşan</div><button class="a">Haftayı aç</button></div>`);
@@ -473,8 +494,8 @@ body[data-ui="mobile"] #app{
       const dt = addDays(V.week, i);
       const k = dkey(dt);
       const evs = dayEvents(dt.getFullYear(), dt.getMonth(), dt.getDate());
-      const today = k === TKEY, past = k < TKEY;
-      const day = document.createElement('div'); day.className = 'wday' + (past ? ' past' : '');
+      const today = k === TKEY;
+      const day = document.createElement('div'); day.className = 'wday';
       day.innerHTML = `<div class="wleft">
           <div class="wdow">${DOW[i]}</div>
           <div class="wnum" style="color:${today ? '#f6f5f2' : INK};background:${today ? GREEN : 'transparent'}">${dt.getDate()}</div>
@@ -482,7 +503,7 @@ body[data-ui="mobile"] #app{
       const right = day.querySelector('.wright');
       evs.forEach(e => {
         const b = document.createElement('button'); b.className = 'ev';
-        b.innerHTML = `<div class="ev-c" style="background:${past ? 'rgba(27,26,24,.28)' : e.color}"></div>
+        b.innerHTML = `<div class="ev-c" style="background:${e.color}"></div>
           <div class="ev-t tnum">${esc(e.time || '—')}</div>
           <div class="ev-n">${esc(e.text)}${e.note ? ' <span style="opacity:.4;font-weight:500">· ' + esc(e.note) + '</span>' : ''}</div>`;
         b.onclick = () => openSheet(e, e.date);
@@ -564,13 +585,13 @@ body[data-ui="mobile"] #app{
   /* ---------------- kayıt sheet'i ---------------- */
   function openSheet(ev, date) {
     const editing = !!ev;
-    const fav = S.colorUsage().filter(c => c.n).slice(0, 6);
+    const cats = S.catUsage();
     let dr = {
       title: ev ? ev.text : '',
       note: ev ? (ev.note || '') : '',
       date: ev ? ev.date : date,
       time: ev ? (ev.time || '10:00') : '10:00',
-      cat: ev ? ev.cat : (fav[0] ? fav[0].id : 'mavi')
+      cat: ev ? ev.cat : 'genel'
     };
     const box = document.createElement('div');
     const draw = () => {
@@ -588,18 +609,13 @@ body[data-ui="mobile"] #app{
           <input class="mini tnum" id="fTime" type="time" value="${dr.time}">
         </div>
       </div>
-      ${fav.length > 2 ? `<div class="lab">Sık kullanılan</div>
-      <div class="pal" id="fFav" style="grid-template-columns:repeat(6,minmax(0,1fr))">${fav.map(c => `<button data-c="${c.id}" class="${c.id === dr.cat ? 'on' : ''}">
-          <div class="sw" style="background:${c.color};box-shadow:${c.id === dr.cat ? '0 0 0 2.5px ' + INK : 'inset 0 0 0 1px rgba(27,26,24,.08)'}"></div>
-          <div class="nm">${esc(c.name)}</div></button>`).join('')}</div>` : ''}
-      <div class="lab">${fav.length > 2 ? 'Tüm renkler' : 'Renk'}</div>
-      <div class="pal" id="fPal">${S.data.cats.map(c => `<button data-c="${c.id}" class="${c.id === dr.cat ? 'on' : ''}">
-          <div class="sw" style="background:${c.color};box-shadow:${c.id === dr.cat ? '0 0 0 2.5px ' + INK : 'inset 0 0 0 1px rgba(27,26,24,.08)'}"></div>
-          <div class="nm">${esc(c.name)}</div></button>`).join('')}</div>
+      <div class="lab">Kategori</div>
+      <div class="cats" id="fCats">${cats.map(c => `<button data-c="${c.id}" class="${c.id === dr.cat ? 'on' : ''}">
+          <i style="background:${c.color}"></i>${esc(c.name)}</button>`).join('')}</div>
       <button class="save" id="fSave" style="background:${color}">Kaydet</button>
       ${editing ? '<button class="del" id="fDel">Bu günü sil</button>' : ''}
       ${editing && ev.gid && S.groupCount(ev.gid) > 1 ? `<button class="del" id="fDelG">Serinin tümünü sil (${S.groupCount(ev.gid)} gün)</button>` : ''}
-      <div class="note">Yıl görünümünde o gün bu renkle işaretlenir</div>`;
+      <div class="note">Yıl görünümünde o gün bu kategorinin rengiyle işaretlenir</div>`;
 
       box.querySelector('.sh-x').onclick = closeSheet;
       const grab = () => {
@@ -608,10 +624,9 @@ body[data-ui="mobile"] #app{
         dr.date = box.querySelector('#fDate').value || dr.date;
         dr.time = box.querySelector('#fTime').value || '';
       };
-      const pickCat = b => b.onclick = () => { grab(); dr.cat = b.dataset.c; draw(); };
-      box.querySelector('#fPal').querySelectorAll('button').forEach(pickCat);
-      const favBox = box.querySelector('#fFav');
-      if (favBox) favBox.querySelectorAll('button').forEach(pickCat);
+      box.querySelector('#fCats').querySelectorAll('button').forEach(b => {
+        b.onclick = () => { grab(); dr.cat = b.dataset.c; draw(); };
+      });
       box.querySelector('#fSave').onclick = () => { grab(); commit(); };
       const del = box.querySelector('#fDel');
       if (del) del.onclick = () => { S.deleteEvent(ev.id); closeSheet(); render(); toast('Kayıt silindi', true); };
@@ -790,6 +805,16 @@ body[data-ui="mobile"] #app{
   }
 
   /* ---------------- montaj ---------------- */
+  function paintStatus() {
+    const el = $('mKicker'); if (!el) return;
+    const st = S.status;
+    const i = el.querySelector('i');
+    const col = st.kind === 'err' ? '#C25A4E' : (st.kind === 'sync' ? 'rgba(27,26,24,.3)' : '');
+    if (col && !i) { render(); return; }
+    if (!col && i) i.remove();
+    if (col && i) i.style.background = col;
+  }
+
   function mount() {
     if (!document.getElementById('mobile-css')) {
       const s = document.createElement('style'); s.id = 'mobile-css'; s.textContent = CSS;
@@ -797,6 +822,7 @@ body[data-ui="mobile"] #app{
     }
     if (!V) initState();
     buildShell();
+    S.on('status', () => { if (document.body.dataset.ui === 'mobile') paintStatus(); });
     render();
   }
 
