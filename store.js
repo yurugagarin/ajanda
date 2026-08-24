@@ -134,7 +134,7 @@ var Store = (function () {
     if (!D.habitLog || typeof D.habitLog !== 'object') D.habitLog = {};
     if (!D.deleted || typeof D.deleted !== 'object') D.deleted = {};
     if (!D.countdown || typeof D.countdown !== 'object') D.countdown = { v: '', mt: 0 };
-    D.events = D.events.map(e => Object.assign({ time: '', amtType: 'none', amt: 0, mt: 1 }, e));
+    D.events = D.events.map(e => Object.assign({ time: '', note: '', amtType: 'none', amt: 0, mt: 1 }, e));
     // eksik palet renklerini tamamla
     const has = {}; D.cats.forEach(c => has[c.id] = 1);
     PALETTE.forEach((p, i) => { if (!has[p.id]) D.cats.push({ id: p.id, name: p.name, color: p.color, o: i, mt: 0 }); });
@@ -224,7 +224,7 @@ var Store = (function () {
   function eventsOn(k) { return D.events.filter(e => e.date === k).sort(byTime); }
 
   function addEvent(ev) {
-    const e = Object.assign({ id: uid('e'), date: todayKey(), time: '', text: '', cat: 'mavi', amtType: 'none', amt: 0 }, ev);
+    const e = Object.assign({ id: uid('e'), date: todayKey(), time: '', note: '', text: '', cat: 'mavi', amtType: 'none', amt: 0 }, ev);
     e.mt = now(); D.events.push(e); commit(); return e;
   }
   /* birden çok güne aynı kaydı ekler (seri = gid) */
@@ -232,7 +232,7 @@ var Store = (function () {
     const gid = uid('g'), t = now();
     (dates || []).forEach(d => {
       D.events.push(Object.assign(
-        { id: uid('e'), time: '', text: '', cat: 'mavi', amtType: 'none', amt: 0 },
+        { id: uid('e'), time: '', note: '', text: '', cat: 'mavi', amtType: 'none', amt: 0 },
         base || {}, { date: d, gid: gid, mt: t }));
     });
     commit();
@@ -241,7 +241,9 @@ var Store = (function () {
   function groupCount(gid) { return gid ? D.events.filter(e => e.gid === gid).length : 0; }
   function deleteGroup(gid) {
     if (!gid) return 0;
-    const ids = D.events.filter(e => e.gid === gid).map(e => e.id);
+    const arr = D.events.filter(e => e.gid === gid);
+    undoBin = { events: arr, at: now() };
+    const ids = arr.map(e => e.id);
     D.events = D.events.filter(e => e.gid !== gid);
     const t = now(); ids.forEach(id => D.deleted[id] = t);
     commit();
@@ -252,9 +254,20 @@ var Store = (function () {
     D.events = D.events.map(e => e.id === id ? Object.assign({}, e, patch, { mt: now() }) : e);
     commit();
   }
+  let undoBin = null;
   function deleteEvent(id) {
+    const ev = D.events.filter(e => e.id === id)[0];
+    if (ev) undoBin = { events: [ev], at: now() };
     D.events = D.events.filter(e => e.id !== id);
     D.deleted[id] = now(); commit();
+  }
+  function canUndo() { return !!(undoBin && undoBin.events.length); }
+  function undo() {
+    if (!canUndo()) return 0;
+    const t = now(), list = undoBin.events;
+    list.forEach(e => { delete D.deleted[e.id]; D.events.push(Object.assign({}, e, { mt: t })); });
+    undoBin = null; commit();
+    return list.length;
   }
   function updateCat(id, patch) {
     D.cats = D.cats.map(c => c.id === id ? Object.assign({}, c, patch, { mt: now() }) : c);
@@ -297,6 +310,112 @@ var Store = (function () {
       D.habitLog[k] = { i: v, mt: now() };
     });
     D.habitsMt = now(); commit();
+  }
+
+  /* seri kayıtları tek satırda topla (listelerde 5 kez tekrar etmesin) */
+  function collapse(list) {
+    const out = [], seen = {};
+    (list || []).forEach(e => {
+      if (e.gid) {
+        if (seen[e.gid]) return;
+        seen[e.gid] = 1;
+        const all = D.events.filter(x => x.gid === e.gid).map(x => x.date).sort();
+        const first = all[0], last = all[all.length - 1];
+        const a = parseKey(first), b = parseKey(last);
+        const span = Math.round((new Date(b.y, b.m, b.d) - new Date(a.y, a.m, a.d)) / 86400000) + 1;
+        out.push({ ev: e, first: first, last: last, count: all.length, contiguous: span === all.length });
+      } else out.push({ ev: e, first: e.date, last: e.date, count: 1, contiguous: true });
+    });
+    return out;
+  }
+  function spanLabel(it) {
+    const a = parseKey(it.first), b = parseKey(it.last);
+    if (it.count === 1) return a.d + ' ' + MONTHS_SHORT[a.m];
+    if (it.contiguous) {
+      return a.m === b.m ? a.d + '–' + b.d + ' ' + MONTHS_SHORT[b.m]
+        : a.d + ' ' + MONTHS_SHORT[a.m] + ' – ' + b.d + ' ' + MONTHS_SHORT[b.m];
+    }
+    return a.d + ' ' + MONTHS_SHORT[a.m] + ' · ' + it.count + ' gün';
+  }
+
+  /* ---------- renk kullanımı (sık kullanılan sırası) ---------- */
+  function colorUsage() {
+    const n = {};
+    D.events.forEach(e => n[e.cat] = (n[e.cat] || 0) + 1);
+    return D.cats.map(c => ({ id: c.id, name: c.name, color: c.color, n: n[c.id] || 0 }))
+      .sort((a, b) => b.n - a.n);
+  }
+  /* seri (gid) günlerinin kümesi — bitişik gün şeridi çizmek için */
+  function groupDays() {
+    const m = {};
+    D.events.forEach(e => { if (e.gid) (m[e.gid] = m[e.gid] || {})[e.date] = 1; });
+    return m;
+  }
+
+  /* ---------- takvim dışa aktarma (.ics) ---------- */
+  function icsEsc(v) { return String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
+  function fold(line) {
+    if (line.length <= 73) return line;
+    let out = line.slice(0, 73), rest = line.slice(73);
+    while (rest.length > 72) { out += '\r\n ' + rest.slice(0, 72); rest = rest.slice(72); }
+    return out + '\r\n ' + rest;
+  }
+  function stamp() {
+    const d = new Date();
+    return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + 'T' +
+      pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds()) + 'Z';
+  }
+  function toICS(events) {
+    const list = events || D.events;
+    const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Ajanda//TR', 'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH', 'X-WR-CALNAME:Ajanda', 'X-WR-TIMEZONE:Europe/Berlin'];
+    const ts = stamp();
+    list.forEach(e => {
+      const p = parseKey(e.date);
+      const ymd = e.date.replace(/-/g, '');
+      L.push('BEGIN:VEVENT');
+      /* UID kayıt kimliğinden üretilir: aynı dosyayı tekrar aktarınca */
+      /* takvim yeni kopya oluşturmaz, mevcut kaydı günceller.        */
+      L.push('UID:' + e.id + '@ajanda.local');
+      L.push('DTSTAMP:' + ts);
+      L.push('SEQUENCE:' + Math.floor((e.mt || 1) / 1000 % 2000000000));
+      if (e.time && /^\d{2}:\d{2}$/.test(e.time)) {
+        const hh = Number(e.time.slice(0, 2)), mm = Number(e.time.slice(3, 5));
+        const end = new Date(p.y, p.m, p.d, hh + 1, mm);
+        L.push('DTSTART:' + ymd + 'T' + pad(hh) + pad(mm) + '00');
+        L.push('DTEND:' + dkey(end.getFullYear(), end.getMonth(), end.getDate()).replace(/-/g, '') +
+          'T' + pad(end.getHours()) + pad(end.getMinutes()) + '00');
+      } else {
+        const nx = new Date(p.y, p.m, p.d + 1);
+        L.push('DTSTART;VALUE=DATE:' + ymd);
+        L.push('DTEND;VALUE=DATE:' + dkey(nx.getFullYear(), nx.getMonth(), nx.getDate()).replace(/-/g, ''));
+      }
+      L.push(fold('SUMMARY:' + icsEsc(e.text)));
+      if (e.note) L.push(fold('DESCRIPTION:' + icsEsc(e.note)));
+      L.push(fold('CATEGORIES:' + icsEsc(cat(e.cat).name)));
+      L.push('END:VEVENT');
+    });
+    L.push('END:VCALENDAR');
+    return L.join('\r\n');
+  }
+  function downloadICS(events, name) {
+    const blob = new Blob([toICS(events)], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = (name || 'ajanda') + '.ics';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  /* ---------- arama ---------- */
+  function search(q, limit) {
+    const s = (q || '').trim().toLocaleLowerCase('tr');
+    if (s.length < 2) return [];
+    return D.events
+      .filter(e => (e.text || '').toLocaleLowerCase('tr').indexOf(s) >= 0 ||
+        (e.note || '').toLocaleLowerCase('tr').indexOf(s) >= 0)
+      .sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0)
+      .slice(0, limit || 40);
   }
 
   /* ---------- P&L ---------- */
@@ -431,7 +550,7 @@ var Store = (function () {
     catMap, habitMap, cat, eventsByDate, eventsOn, byTime,
     addEvent, addEvents, groupCount, deleteGroup, updateEvent, deleteEvent, updateCat, addCat, setCountdown,
     doneOn, toggleHabit, habitStreak, updateHabit, addHabit, deleteHabit,
-    totals, exportJSON, importJSON,
+    totals, exportJSON, importJSON, collapse, spanLabel, colorUsage, groupDays, toICS, downloadICS, search, canUndo, undo,
     cfg, setCfg, sync, createGist, startAuto,
     get status() { return statusState; }
   };

@@ -1,11 +1,12 @@
 "use strict";
 /* ===========================================================
    desktop.js — bilgisayar (web) görünümü
-   Sade ajanda: yıl ızgarası + gün paneli + geri sayım.
-   Renkler mobil paletten gelir (Store.PALETTE).
    =========================================================== */
 var DesktopView = (function () {
   const S = Store;
+
+  /* gün kutucuklarındaki renk yoğunluğu — canlı: .70, soluk: .45 */
+  const TILE_ALPHA = 0.58;
 
   const CSS = `
 body[data-ui="desktop"]{
@@ -17,6 +18,7 @@ body[data-ui="desktop"]{
 .fr{font-family:'Fraunces',Georgia,serif}
 .d-wrap{max-width:1340px;margin:0 auto}
 @keyframes drawerIn{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes toastIn{from{transform:translate(-50%,14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus-visible,body[data-ui="desktop"] textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .yc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
 @media (max-width:1180px){.yc-grid{grid-template-columns:repeat(2,1fr)}}
@@ -29,25 +31,98 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
 .d-yr button{padding:14px 4px;border:1px solid #e2d7c1;border-radius:12px;background:#fff;font-size:16px;font-weight:700;color:#5a5142;cursor:pointer;font-family:inherit}
 .d-yr button.on{background:var(--acc);border-color:var(--acc);color:#fff}
 .d-yr button.now{box-shadow:inset 0 0 0 1.5px var(--gold)}
+.d-in{border:1px solid #d9ccb5;border-radius:10px;padding:9px 12px;font-size:14px;font-family:inherit;background:var(--card);color:var(--ink);outline:none}
+.d-in::placeholder{color:#bdae93}
+.d-btn{background:var(--card);border:1px solid #d9ccb5;border-radius:9px;padding:8px 13px;font-size:13px;font-weight:600;color:#6b5f4d;cursor:pointer;font-family:inherit}
+.d-btn:hover{background:#fff}
+.d-cell{transition:opacity .14s ease}
+.d-leg{display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;background:rgba(251,248,242,.7);border-radius:20px;padding:4px 11px 4px 8px;font-size:12.5px;font-weight:600;color:#5a5142;cursor:pointer;font-family:inherit}
+.d-leg:hover{background:#fff}
+.d-leg.on{border-color:#3a342c;background:#fff}
+.d-toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,0);z-index:80;background:#3a342c;color:#f3ecdf;
+  border-radius:12px;padding:11px 14px;display:flex;align-items:center;gap:14px;font-size:13.5px;font-weight:600;
+  box-shadow:0 12px 30px rgba(40,35,28,.3);animation:toastIn .18s ease}
+.d-toast button{background:rgba(243,236,223,.14);border:1px solid rgba(243,236,223,.28);color:#f3ecdf;border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.d-res{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:30;background:var(--card);border:1px solid #e2d7c1;
+  border-radius:12px;box-shadow:0 14px 34px rgba(40,35,28,.2);max-height:340px;overflow-y:auto;padding:6px}
+.d-res button{display:flex;width:100%;align-items:center;gap:10px;background:none;border:none;border-radius:9px;padding:8px 10px;cursor:pointer;text-align:left;font-family:inherit}
+.d-res button:hover{background:#f3ecdd}
+.d-wd{display:flex;gap:3px}
+.d-wd button{width:30px;height:28px;border-radius:7px;border:1px solid rgba(243,236,223,.25);background:rgba(243,236,223,.06);color:#bcae97;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.d-wd button.on{background:var(--gold);border-color:var(--gold);color:#3a342c}
 @media (prefers-reduced-motion:reduce){.d-app *{animation:none!important;transition:none!important}}
 `;
 
-  /* gün kutucuklarındaki renk yoğunluğu — daha canlı isterseniz .70, daha soluk isterseniz .45 */
-  const TILE_ALPHA = 0.58;
+  const MONTH_WORDS = {
+    oca: 0, ocak: 0, şub: 1, sub: 1, şubat: 1, subat: 1, mar: 2, mart: 2, nis: 3, nisan: 3,
+    may: 4, mayıs: 4, mayis: 4, haz: 5, haziran: 5, tem: 6, temmuz: 6, ağu: 7, agu: 7,
+    ağustos: 7, agustos: 7, eyl: 8, eylül: 8, eylul: 8, eki: 9, ekim: 9, kas: 10, kasım: 10,
+    kasim: 10, ara: 11, aralık: 11, aralik: 11
+  };
 
   let V = null;
   function init() {
     V = {
       year: new Date().getFullYear(), selected: null,
-      draft: { text: '', cat: 'mavi', time: '' },
-      yearPick: false, setOpen: false,
-      multi: null   // {dates:[], text:'', cat:'mavi', time:''}
+      draft: { text: '', cat: 'mavi', time: '', note: '' },
+      yearPick: false, setOpen: false, tools: false,
+      multi: null, hl: null, q: '', qFocus: false,
+      toast: null
     };
   }
 
-  /* ---------------- render ---------------- */
+  /* ---------- hızlı ekleme ayrıştırıcı ---------- */
+  function parseQuick(raw) {
+    let s = ' ' + (raw || '').trim() + ' ';
+    if (!s.trim()) return null;
+    const today = new Date();
+    let y = null, m = null, d = null, time = '';
+
+    const t = s.match(/\s(\d{1,2})[:.](\d{2})\s/);
+    if (t) { time = S.pad(Math.min(23, +t[1])) + ':' + t[2]; s = s.replace(t[0], ' '); }
+
+    let mm = s.match(/\s(bugün|bugun)\s/i);
+    if (mm) { d = today.getDate(); m = today.getMonth(); y = today.getFullYear(); s = s.replace(mm[0], ' '); }
+    if (d === null && (mm = s.match(/\s(yarın|yarin)\s/i))) {
+      const n = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+      d = n.getDate(); m = n.getMonth(); y = n.getFullYear(); s = s.replace(mm[0], ' ');
+    }
+    if (d === null && (mm = s.match(/\s(\d{1,2})[.\/](\d{1,2})(?:[.\/](\d{2,4}))?\s/))) {
+      d = +mm[1]; m = +mm[2] - 1;
+      if (mm[3]) y = mm[3].length === 2 ? 2000 + +mm[3] : +mm[3];
+      s = s.replace(mm[0], ' ');
+    }
+    if (d === null && (mm = s.match(/\s(\d{1,2})\s+([a-zA-ZçğıöşüÇĞİÖŞÜ]{3,9})(?:\s+(\d{4}))?\s/))) {
+      const key = mm[2].toLocaleLowerCase('tr');
+      if (key in MONTH_WORDS) {
+        d = +mm[1]; m = MONTH_WORDS[key];
+        if (mm[3]) y = +mm[3];
+        s = s.replace(mm[0], ' ');
+      }
+    }
+    if (d === null) { d = today.getDate(); m = today.getMonth(); y = today.getFullYear(); }
+    if (y === null) {
+      y = today.getFullYear();
+      const cand = S.dkey(y, m, d);
+      if (cand < S.todayKey()) y++;   /* geçmişse gelecek yıla al */
+    }
+    if (m < 0 || m > 11 || d < 1 || d > 31) return null;
+    const text = s.replace(/\s+/g, ' ').trim();
+    return { date: S.dkey(y, m, d), time: time, text: text || 'Yeni kayıt' };
+  }
+
+  /* ---------- bildirim ---------- */
+  let toastT = null;
+  function toast(msg, undo) {
+    V.toast = { msg: msg, undo: !!undo };
+    clearTimeout(toastT);
+    toastT = setTimeout(() => { V.toast = null; render(); }, undo ? 7000 : 2600);
+    render();
+  }
+
+  /* ---------- render ---------- */
   function render() {
-    const cm = S.catMap(), byDate = S.eventsByDate();
+    const cm = S.catMap(), byDate = S.eventsByDate(), gdays = S.groupDays();
     const tKey = S.todayKey(), tp = S.parseKey(tKey);
     const cd = S.data.countdown.v;
 
@@ -61,7 +136,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       else { cdDays = Math.abs(diff); cdUnit = 'gün geçti'; }
     }
 
-    /* üst kart — bugün + yaklaşan (kompakt) */
+    /* ---- üst kart ---- */
     const todayEvents = byDate[tKey] || [];
     const todayEvHtml = todayEvents.length ? todayEvents.map(ev => {
       const c = cm[ev.cat] || { color: '#8a7f6f' };
@@ -71,24 +146,25 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         ${ev.time ? `<span style="font-size:11.5px;color:#bcae97;font-weight:600">${ev.time}</span>` : ''}</div>`;
     }).join('') : '<div style="border:1px dashed rgba(243,236,223,.26);border-radius:9px;padding:10px;text-align:center;color:#bcae97;font-size:12.5px">Bugüne ait kayıt yok.</div>';
 
-    const upcoming = S.data.events.filter(e => e.date > tKey)
-      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b)).slice(0, 4);
-    const upHtml = upcoming.length ? upcoming.map(ev => {
+    const upcoming = S.collapse(S.data.events.filter(e => e.date > tKey)
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b))).slice(0, 4);
+    const upHtml = upcoming.length ? upcoming.map(it => {
+      const ev = it.ev;
       const c = cm[ev.cat] || { color: '#8a7f6f' };
-      const p = S.parseKey(ev.date);
-      return `<button onclick="DV.open('${ev.date}')" style="display:flex;align-items:center;gap:9px;background:rgba(243,236,223,.08);border:none;border-radius:9px;padding:7px 10px;cursor:pointer;text-align:left;width:100%">
+      const when = S.spanLabel(it) + (ev.time ? ' · ' + ev.time : '') + (it.count > 1 && !it.contiguous ? '' : '');
+      return `<button onclick="DV.open('${ev.date}')" style="display:flex;align-items:center;gap:9px;background:rgba(243,236,223,.08);border:none;border-radius:9px;padding:7px 10px;cursor:pointer;text-align:left;width:100%;font-family:inherit">
         <span style="width:3px;height:20px;border-radius:3px;background:${c.color};flex:none"></span>
         <span style="flex:1;min-width:0;font-size:13px;color:#f3ecdf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${S.esc(ev.text)}</span>
-        <span style="font-size:11.5px;color:#bcae97;font-weight:600;white-space:nowrap">${p.d} ${S.MONTHS_SHORT[p.m]}${ev.time ? ' · ' + ev.time : ''}</span></button>`;
+        <span style="font-size:11.5px;color:#bcae97;font-weight:600;white-space:nowrap">${when}</span></button>`;
     }).join('') : '<div style="border:1px dashed rgba(243,236,223,.26);border-radius:9px;padding:10px;text-align:center;color:#bcae97;font-size:12.5px">Yaklaşan kayıt yok.</div>';
 
     const todayCard = `
-    <div style="background:#3a342c;border-radius:16px;padding:14px 18px;box-shadow:0 6px 18px rgba(58,52,44,.16);margin-bottom:18px;display:grid;grid-template-columns:minmax(190px,220px) 1fr 1fr;gap:20px;align-items:start">
+    <div style="background:#3a342c;border-radius:16px;padding:14px 18px;box-shadow:0 6px 18px rgba(58,52,44,.16);margin-bottom:16px;display:grid;grid-template-columns:minmax(190px,220px) 1fr 1fr;gap:20px;align-items:start">
       <div>
         <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);font-weight:700">Bugün</div>
         <div class="fr" style="font-size:26px;line-height:1.1;font-weight:600;color:#f3ecdf;margin-top:3px">${tp.d} ${S.MONTHS[tp.m]}</div>
         <div style="font-size:12.5px;font-weight:600;color:#bcae97">${S.WD_FULL[S.weekday(tKey)]}</div>
-        <button onclick="DV.open('${tKey}')" style="margin-top:10px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:9px;padding:8px;font-size:13px;font-weight:700;cursor:pointer">Bugüne kayıt ekle</button>
+        <button onclick="DV.open('${tKey}')" style="margin-top:10px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:9px;padding:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Bugüne kayıt ekle</button>
       </div>
       <div>
         <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#bcae97;font-weight:700;margin-bottom:8px">Bugünün kayıtları</div>
@@ -100,7 +176,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       </div>
     </div>`;
 
-    /* aylar */
+    /* ---- aylar ---- */
     const Y = V.year;
     const monthsHtml = S.MONTHS.map((name, m) => {
       const lead = (new Date(Y, m, 1).getDay() + 6) % 7;
@@ -119,30 +195,45 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         const seen = {}, colors = [];
         evs.forEach(e => { const col = (cm[e.cat] || {}).color || '#8a7f6f'; if (!seen[col]) { seen[col] = 1; colors.push(col); } });
 
-        let bg = weekend ? '#f1e8d7' : 'transparent', border = '1px solid transparent',
+        /* seri şeridi: aynı gid'in dünü/yarını varsa kutucuklar birleşsin */
+        let bandL = false, bandR = false;
+        for (let j = 0; j < evs.length; j++) {
+          const g = evs[j].gid && gdays[evs[j].gid];
+          if (!g) continue;
+          if (wd > 0 && g[S.shiftKey(k, -1)]) bandL = true;
+          if (wd < 6 && g[S.shiftKey(k, 1)]) bandR = true;
+        }
+
+        let bg = weekend ? '#f1e8d7' : 'transparent', bc = 'transparent',
           numColor = weekend ? '#b09a78' : '#5a5142', dots = [], dotShadow = '';
         const picked = V.multi && V.multi.dates.indexOf(k) >= 0;
 
         if (isPast) {
-          /* geçmiş: koyu dolu kutucuk, kayıtlar altta nokta olarak */
-          bg = '#4a4136'; border = '1px solid #423a30'; numColor = '#b7a98f';
+          bg = '#4a4136'; bc = '#423a30'; numColor = '#b7a98f';
           dots = colors.slice(0, 4); dotShadow = 'box-shadow:0 0 0 1px rgba(74,65,54,.9);';
         } else if (evs.length) {
-          /* gelecek + kayıt: rengin yumuşak dolgusu */
           bg = S.rgba(colors[0], TILE_ALPHA);
-          border = '1px solid ' + S.rgba(colors[0], .88);
+          bc = S.rgba(colors[0], .88);
           numColor = '#3a342c';
           dots = colors.slice(1, 4);
         }
-        if (isToday) { border = '1.5px solid var(--acc)'; if (!evs.length && !isPast) { bg = '#fbeede'; numColor = '#b5552e'; } }
-        if (isTarget) border = '1.5px solid var(--gold)';
-        if (picked) { border = '2px solid #3a342c'; if (!evs.length && !isPast) bg = '#efe4cd'; }
+
+        let radius = '8px', extra = '';
+        if (bandL || bandR) {
+          radius = bandL && bandR ? '0' : (bandL ? '0 8px 8px 0' : '8px 0 0 8px');
+          extra += (bandL ? 'margin-left:-4px;border-left:none;' : '') + (bandR ? 'margin-right:-4px;border-right:none;' : '');
+        }
+        let bw = '1px';
+        if (isToday) { bc = '#b5552e'; bw = '1.5px'; if (!evs.length && !isPast) { bg = '#fbeede'; numColor = '#b5552e'; } }
+        if (isTarget) { bc = '#e3a23f'; bw = '1.5px'; }
+        if (picked) { bc = '#3a342c'; bw = '2px'; if (!evs.length && !isPast) bg = '#efe4cd'; }
 
         const dotsHtml = dots.map(c => '<span style="width:5px;height:5px;border-radius:50%;background:' + c + ';display:inline-block;' + dotShadow + '"></span>').join('');
         const title = evs.map(e => (e.time ? e.time + ' ' : '') + e.text).join(' · ');
         const fw = (isToday || (evs.length && !isPast)) ? 700 : 500;
         const ff = (evs.length && !isPast) ? "'Fraunces',Georgia,serif" : "'Karla',sans-serif";
-        cells += `<div onclick="DV.cell('${k}')" title="${S.esc(title)}" style="height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;background:${bg};border:${border}">
+        const dc = evs.length ? ` data-c="${evs[0].cat}"` : '';
+        cells += `<div class="d-cell"${dc} onclick="DV.cell('${k}')" title="${S.esc(title)}" style="height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:${radius};cursor:pointer;background:${bg};border:${bw} solid ${bc};${extra}">
           <span style="font-size:12.5px;line-height:1;font-weight:${fw};color:${numColor};font-family:${ff}">${n}</span>
           <div style="display:flex;gap:2px;justify-content:center;height:5px;margin-top:1px">${dotsHtml}</div></div>`;
       }
@@ -155,25 +246,81 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">${cells}</div></div>`;
     }).join('');
 
-    /* gün paneli */
+    /* ---- renk lejantı ---- */
+    const usage = S.colorUsage().filter(c => c.n);
+    const legend = usage.length ? `<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:14px">
+      ${usage.map(c => `<button class="d-leg ${V.hl === c.id ? 'on' : ''}" onclick="DV.hl('${c.id}',true)"
+        onmouseenter="DV.hlHover('${c.id}')" onmouseleave="DV.hlHover(null)">
+        <span style="width:10px;height:10px;border-radius:50%;background:${c.color};display:inline-block"></span>${S.esc(c.name)}
+        <span style="opacity:.5;font-weight:600">${c.n}</span></button>`).join('')}
+      ${V.hl ? '<button class="d-leg" onclick="DV.hl(null,true)" style="color:#b5552e">temizle ×</button>' : ''}
+    </div>` : '';
+
+    /* ---- arama sonuçları ---- */
+    const results = V.q.trim().length >= 2 ? S.search(V.q, 30) : [];
+    const resHtml = V.q.trim().length >= 2 ? `<div class="d-res">
+      ${results.length ? results.map(ev => {
+      const p = S.parseKey(ev.date), c = cm[ev.cat] || { color: '#8a7f6f' };
+      return `<button onclick="DV.goto('${ev.date}')">
+          <span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex:none"></span>
+          <span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${S.esc(ev.text)}</span>
+          <span style="font-size:12px;color:#a8987c;font-weight:600;white-space:nowrap">${p.d} ${S.MONTHS_SHORT[p.m]} ${p.y}${ev.time ? ' · ' + ev.time : ''}</span></button>`;
+    }).join('') : '<div style="padding:12px;text-align:center;color:#bdae93;font-size:13px">Eşleşen kayıt yok.</div>'}
+    </div>` : '';
+
+    /* ---- çoklu gün çubuğu ---- */
+    let multiBar = '';
+    if (V.multi) {
+      const M = V.multi;
+      const sw = S.colorUsage().map(c => `<button onclick="DV.mset('cat','${c.id}')" title="${S.escAttr(c.name)}"
+        style="width:20px;height:20px;border-radius:50%;background:${c.color};border:${M.cat === c.id ? '2.5px solid #f3ecdf' : '2.5px solid transparent'};cursor:pointer;padding:0"></button>`).join('');
+      const listTxt = M.dates.length
+        ? M.dates.slice(0, 6).map(d => { const p = S.parseKey(d); return p.d + ' ' + S.MONTHS_SHORT[p.m]; }).join(', ') + (M.dates.length > 6 ? ' +' + (M.dates.length - 6) : '')
+        : 'Takvimden günlere tıklayın ya da aşağıdan aralık ekleyin.';
+      multiBar = `<div style="position:sticky;top:0;z-index:20;background:#3a342c;color:#f3ecdf;border-radius:14px;padding:14px 16px;margin-bottom:16px;box-shadow:0 6px 20px rgba(58,52,44,.22)">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span class="fr" style="font-size:20px;font-weight:600;color:var(--gold);white-space:nowrap">${M.dates.length} gün</span>
+          <input id="mText" value="${S.escAttr(M.text)}" placeholder="Açıklama — örn. Almanca kursu"
+            style="flex:1;min-width:190px;border:1px solid rgba(243,236,223,.22);background:rgba(243,236,223,.08);color:#f3ecdf;border-radius:9px;padding:9px 11px;font-size:14px;font-family:inherit;outline:none">
+          <input id="mTime" type="time" value="${M.time}" title="saat (isteğe bağlı)"
+            style="border:1px solid rgba(243,236,223,.22);background:rgba(243,236,223,.08);color:#f3ecdf;border-radius:9px;padding:8px 10px;font-size:13.5px;font-family:inherit;color-scheme:dark">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;max-width:230px">${sw}</div>
+          <button onclick="DV.msave()" style="background:${M.dates.length ? 'var(--acc)' : 'rgba(243,236,223,.15)'};color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Kaydet</button>
+          <button onclick="DV.multi()" style="background:none;border:1px solid rgba(243,236,223,.25);color:#e6dcc9;border-radius:9px;padding:9px 12px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit">Vazgeç</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:11px;padding-top:11px;border-top:1px solid rgba(243,236,223,.14)">
+          <span style="font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#bcae97;font-weight:700">Aralık</span>
+          <input id="mFrom" type="date" value="${M.from || ''}" style="border:1px solid rgba(243,236,223,.22);background:rgba(243,236,223,.08);color:#f3ecdf;border-radius:9px;padding:7px 9px;font-size:13px;font-family:inherit;color-scheme:dark">
+          <span style="color:#bcae97">–</span>
+          <input id="mTo" type="date" value="${M.to || ''}" style="border:1px solid rgba(243,236,223,.22);background:rgba(243,236,223,.08);color:#f3ecdf;border-radius:9px;padding:7px 9px;font-size:13px;font-family:inherit;color-scheme:dark">
+          <div class="d-wd">${S.WD_MINI.map((w, i) => `<button class="${M.wd[i] ? 'on' : ''}" onclick="DV.mwd(${i})" title="${S.WD_FULL[i]}">${w}</button>`).join('')}</div>
+          <button onclick="DV.mrange()" style="background:rgba(243,236,223,.12);border:1px solid rgba(243,236,223,.25);color:#f3ecdf;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Aralığı ekle</button>
+          <button onclick="DV.mclear()" style="background:none;border:none;color:#bcae97;font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;font-family:inherit">Seçimi temizle</button>
+          <span style="flex:1;min-width:150px;text-align:right;font-size:12.5px;color:#bcae97">${S.esc(listTxt)}</span>
+        </div></div>`;
+    }
+
+    /* ---- gün paneli ---- */
     let drawer = '';
     if (V.selected) {
       const k = V.selected, p = S.parseKey(k);
       const list = S.eventsOn(k);
       const evHtml = list.length ? list.map(ev => {
         const c = cm[ev.cat] || { color: '#8a7f6f' };
+        const gn = ev.gid ? S.groupCount(ev.gid) : 0;
         return `<div style="display:flex;gap:11px;background:#f3ecdd;border-radius:12px;padding:12px 13px">
           <span style="width:4px;border-radius:4px;background:${c.color};flex:none"></span>
           <div style="flex:1;min-width:0">
             <div style="font-size:14.5px;font-weight:600;white-space:pre-line;line-height:1.4">${S.esc(ev.text)}</div>
-            ${ev.time ? `<div style="font-size:12px;color:#a8987c;font-weight:600;margin-top:3px">${ev.time}</div>` : ''}</div>
+            ${ev.time ? `<div style="font-size:12px;color:#a8987c;font-weight:600;margin-top:3px">${ev.time}</div>` : ''}
+            ${ev.note ? `<div style="font-size:13px;color:#6b5f4d;margin-top:5px;white-space:pre-line;line-height:1.45">${S.esc(ev.note)}</div>` : ''}</div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
             <button onclick="DV.del('${ev.id}')" title="Bu günü sil" style="background:none;border:none;color:#bba88a;font-size:17px;cursor:pointer;line-height:1">×</button>
-            ${ev.gid && S.groupCount(ev.gid) > 1 ? `<button onclick="DV.delGroup('${ev.gid}')" title="Bu kaydın tüm günlerini sil" style="background:none;border:none;color:#c08a6f;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">seri (${S.groupCount(ev.gid)})</button>` : ''}
+            ${gn > 1 ? `<button onclick="DV.delGroup('${ev.gid}')" title="Tüm günlerini sil" style="background:none;border:none;color:#c08a6f;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit">seri (${gn})</button>` : ''}
           </div></div>`;
       }).join('') : '<div style="text-align:center;color:#bdae93;font-size:14px;padding:18px 0 26px">Bu gün için kayıt yok.</div>';
 
-      const swatches = S.data.cats.map(c => `<button onclick="DV.draft('cat','${c.id}')"
+      const swatches = S.colorUsage().map(c => `<button onclick="DV.draft('cat','${c.id}')" title="${S.escAttr(c.name)}"
         style="width:26px;height:26px;border-radius:50%;background:${c.color};border:${V.draft.cat === c.id ? '2.5px solid #3a342c' : '2.5px solid transparent'};cursor:pointer;padding:0"></button>`).join('');
 
       drawer = `<div class="d-scrim" onclick="DV.close()" style="z-index:40"></div>
@@ -183,23 +330,25 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
             <div><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#b3a488;font-weight:700">${S.WD_FULL[S.weekday(k)]}${k === tKey ? ' · bugün' : ''}</div>
               <div class="fr" style="font-size:30px;font-weight:600;line-height:1.05;margin-top:2px">${p.d} ${S.MONTHS[p.m]} ${p.y}</div></div>
             <button onclick="DV.close()" style="background:#efe7d6;border:none;width:34px;height:34px;border-radius:50%;font-size:18px;color:#6b5f4d;cursor:pointer">×</button></div>
-          <button onclick="DV.target()" style="margin-top:12px;background:none;border:1px dashed #cdbb9c;border-radius:9px;padding:6px 11px;font-size:12.5px;font-weight:600;color:#9a7d4f;cursor:pointer">★ Bu günü geri sayım hedefi yap</button></div>
+          <button onclick="DV.target()" style="margin-top:12px;background:none;border:1px dashed #cdbb9c;border-radius:9px;padding:6px 11px;font-size:12.5px;font-weight:600;color:#9a7d4f;cursor:pointer;font-family:inherit">★ Bu günü geri sayım hedefi yap</button></div>
         <div style="flex:1;overflow-y:auto;padding:18px 24px">
           <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">${evHtml}</div>
           <div style="border-top:1px solid #ece1cd;padding-top:18px">
             <div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#b3a488;font-weight:700;margin-bottom:11px">Yeni kayıt</div>
-            <textarea id="dText" oninput="DV.draftText(this.value)" placeholder="Ne yapacaksın?" rows="3"
+            <textarea id="dText" oninput="DV.draftText(this.value)" placeholder="Ne yapacaksın?" rows="2"
               style="width:100%;border:1px solid #ddd0b8;border-radius:11px;padding:11px 12px;font-size:14.5px;font-family:inherit;background:#fff;resize:vertical;outline:none">${S.esc(V.draft.text)}</textarea>
+            <textarea id="dNote" oninput="DV.draftNote(this.value)" placeholder="Not (isteğe bağlı) — uçuş no, adres, kişi..." rows="2"
+              style="width:100%;margin-top:8px;border:1px solid #ddd0b8;border-radius:11px;padding:10px 12px;font-size:13.5px;font-family:inherit;background:#fff;resize:vertical;outline:none;color:#5a5142">${S.esc(V.draft.note)}</textarea>
             <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
               <input id="dTime" type="time" value="${V.draft.time}" onchange="DV.draft('time',this.value)"
                 style="border:1px solid #ddd0b8;border-radius:10px;padding:8px 10px;font-size:14px;font-family:inherit;background:#fff">
               <span style="font-size:12.5px;color:#b3a488">saat (isteğe bağlı)</span>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${swatches}</div>
-            <button onclick="DV.add()" style="margin-top:14px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:11px;padding:12px;font-size:15px;font-weight:700;cursor:pointer">Ekle</button></div></div></div>`;
+            <button onclick="DV.add()" style="margin-top:14px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:11px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">Ekle</button></div></div></div>`;
     }
 
-    /* yıl seçici */
+    /* ---- yıl seçici ---- */
     let yearModal = '';
     if (V.yearPick) {
       const cur = new Date().getFullYear();
@@ -213,60 +362,50 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         <div style="margin-top:12px;font-size:12px;color:#b3a488;text-align:center">Altın çerçeveli olan içinde bulunduğun yıl.</div></div>`;
     }
 
-    /* senkron */
+    /* ---- araçlar ---- */
+    let toolsModal = '';
+    if (V.tools) {
+      const c = S.cfg(), st = S.status;
+      toolsModal = `<div class="d-scrim" onclick="DV.toolsToggle()" style="z-index:50"></div>
+      <div class="d-modal" style="z-index:51;width:420px;max-width:92vw">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <span class="fr" style="font-size:24px;font-weight:600">Araçlar</span>
+          <button onclick="DV.toolsToggle()" style="background:#efe7d6;border:none;width:32px;height:32px;border-radius:50%;font-size:17px;color:#6b5f4d;cursor:pointer">×</button></div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <button class="d-btn" style="padding:12px;text-align:left" onclick="Store.sync()">Şimdi eşitle <span style="color:#a8987c;font-weight:600">· ${S.esc(st.text)}</span></button>
+          <button class="d-btn" style="padding:12px;text-align:left" onclick="DV.settings()">Senkron ayarları (token / Gist)</button>
+          <button class="d-btn" style="padding:12px;text-align:left" onclick="DV.ics()">Takvime aktar — ${Y} (.ics)</button>
+          <button class="d-btn" style="padding:12px;text-align:left" onclick="DV.icsAll()">Takvime aktar — tüm kayıtlar (.ics)</button>
+          <button class="d-btn" style="padding:12px;text-align:left" onclick="Store.exportJSON()">Yedek indir (.json)</button>
+          <label class="d-btn" style="padding:12px;text-align:left;display:block">Yedek yükle (.json)<input type="file" accept="application/json" onchange="DV.import(this)" style="display:none"></label>
+        </div>
+        <div style="margin-top:14px;font-size:12px;color:#b3a488;line-height:1.5">.ics dosyasını iPhone'da açıp Takvim'e ekleyebilirsin. Sonradan değişiklik yaparsan dosyayı tekrar aktar — kayıtlar kopyalanmaz, üzerine yazılır.</div>
+      </div>`;
+    }
+
+    /* ---- senkron ---- */
     let setPanel = '';
     if (V.setOpen) {
       const c = S.cfg(), st = S.status;
-      setPanel = `<div class="d-scrim" onclick="DV.settings()" style="z-index:50"></div>
-      <div class="d-modal" style="z-index:51;width:480px;max-width:92vw">
+      setPanel = `<div class="d-scrim" onclick="DV.settings()" style="z-index:52"></div>
+      <div class="d-modal" style="z-index:53;width:480px;max-width:92vw">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <span class="fr" style="font-size:24px;font-weight:600">Senkronizasyon</span>
           <button onclick="DV.settings()" style="background:#efe7d6;border:none;width:32px;height:32px;border-radius:50%;font-size:17px;color:#6b5f4d;cursor:pointer">×</button></div>
-        <div style="font-size:13px;color:#a8987c;margin-bottom:16px;line-height:1.55">Veriler gizli bir GitHub Gist'inde tutulur. Aynı token ve Gist ID'yi telefonda da girin; iki cihaz otomatik eşitlenir.</div>
+        <div style="font-size:13px;color:#a8987c;margin-bottom:16px;line-height:1.55">Veriler gizli bir GitHub Gist'inde tutulur. Aynı token ve Gist ID'yi telefonda da girin.</div>
         <label style="display:block;font-size:12.5px;font-weight:700;color:#8a7355;margin-bottom:6px">GitHub token (yalnızca <b>gist</b> yetkisi)</label>
-        <input id="cfgTok" type="password" value="${S.escAttr(c.token)}" placeholder="ghp_..." style="width:100%;border:1px solid #ddd0b8;border-radius:10px;padding:10px;font-size:14px;font-family:inherit;background:#fff;outline:none">
+        <input id="cfgTok" type="password" value="${S.escAttr(c.token)}" placeholder="ghp_..." class="d-in" style="width:100%;background:#fff">
         <label style="display:block;font-size:12.5px;font-weight:700;color:#8a7355;margin:14px 0 6px">Gist ID</label>
-        <input id="cfgGist" value="${S.escAttr(c.gist)}" placeholder="boş bırakırsanız ilk eşitlemede oluşturulur" style="width:100%;border:1px solid #ddd0b8;border-radius:10px;padding:10px;font-size:14px;font-family:inherit;background:#fff;outline:none">
-        <button onclick="DV.saveCfg()" style="margin-top:14px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:11px;padding:12px;font-size:15px;font-weight:700;cursor:pointer">Kaydet ve eşitle</button>
+        <input id="cfgGist" value="${S.escAttr(c.gist)}" placeholder="boş bırakırsanız ilk eşitlemede oluşturulur" class="d-in" style="width:100%;background:#fff">
+        <button onclick="DV.saveCfg()" style="margin-top:14px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:11px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">Kaydet ve eşitle</button>
         <div style="margin-top:10px;font-size:13px;color:#8a7355;text-align:center">${S.esc(st.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
         ${c.gist ? `<div style="margin-top:14px;background:#f3ecdd;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#6b5f4d;word-break:break-all">Telefona girilecek Gist ID:<br><b>${S.esc(c.gist)}</b></div>` : ''}
       </div>`;
     }
 
-    /* çoklu gün seçim çubuğu */
-    let multiBar = '';
-    if (V.multi) {
-      const M = V.multi;
-      const sw = S.data.cats.map(c => `<button onclick="DV.mset('cat','${c.id}')"
-        style="width:20px;height:20px;border-radius:50%;background:${c.color};border:${M.cat === c.id ? '2.5px solid #f3ecdf' : '2.5px solid transparent'};cursor:pointer;padding:0"></button>`).join('');
-      const listTxt = M.dates.length
-        ? M.dates.slice(0, 6).map(d => { const p = S.parseKey(d); return p.d + ' ' + S.MONTHS_SHORT[p.m]; }).join(', ') + (M.dates.length > 6 ? ' +' + (M.dates.length - 6) : '')
-        : 'Takvimden günlere tıklayın ya da aşağıdan bir aralık ekleyin.';
-      multiBar = `<div style="position:sticky;top:0;z-index:20;background:#3a342c;color:#f3ecdf;border-radius:14px;padding:14px 16px;margin-bottom:16px;box-shadow:0 6px 20px rgba(58,52,44,.22)">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <span class="fr" style="font-size:20px;font-weight:600;color:var(--gold);white-space:nowrap">${M.dates.length} gün</span>
-          <input id="mText" value="${S.escAttr(M.text)}" placeholder="Açıklama — örn. Almanca kursu"
-            style="flex:1;min-width:200px;border:1px solid rgba(243,236,223,.22);background:rgba(243,236,223,.08);color:#f3ecdf;border-radius:9px;padding:9px 11px;font-size:14px;font-family:inherit;outline:none">
-          <input id="mTime" type="time" value="${M.time}" title="saat (isteğe bağlı)"
-            style="border:1px solid rgba(243,236,223,.22);background:rgba(243,236,223,.08);color:#f3ecdf;border-radius:9px;padding:8px 10px;font-size:13.5px;font-family:inherit;color-scheme:dark">
-          <div style="display:flex;gap:6px;flex-wrap:wrap;max-width:230px">${sw}</div>
-          <button onclick="DV.msave()" ${M.dates.length ? '' : 'disabled'} style="background:${M.dates.length ? 'var(--acc)' : 'rgba(243,236,223,.15)'};color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:700;cursor:${M.dates.length ? 'pointer' : 'default'}">Kaydet</button>
-          <button onclick="DV.multi()" style="background:none;border:1px solid rgba(243,236,223,.25);color:#e6dcc9;border-radius:9px;padding:9px 12px;font-size:13.5px;font-weight:600;cursor:pointer">Vazgeç</button>
-        </div>
-        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:11px;padding-top:11px;border-top:1px solid rgba(243,236,223,.14)">
-          <span style="font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#bcae97;font-weight:700">Aralık ekle</span>
-          <input id="mFrom" type="date" value="${M.from || ''}" style="border:1px solid rgba(243,236,223,.22);background:rgba(243,236,223,.08);color:#f3ecdf;border-radius:9px;padding:7px 9px;font-size:13px;font-family:inherit;color-scheme:dark">
-          <span style="color:#bcae97">–</span>
-          <input id="mTo" type="date" value="${M.to || ''}" style="border:1px solid rgba(243,236,223,.22);background:rgba(243,236,223,.08);color:#f3ecdf;border-radius:9px;padding:7px 9px;font-size:13px;font-family:inherit;color-scheme:dark">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#e6dcc9;cursor:pointer"><input type="checkbox" id="mWd" ${M.weekdays ? 'checked' : ''} style="accent-color:#e3a23f"> sadece hafta içi</label>
-          <button onclick="DV.mrange()" style="background:rgba(243,236,223,.12);border:1px solid rgba(243,236,223,.25);color:#f3ecdf;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;cursor:pointer">Aralığı seçime ekle</button>
-          <button onclick="DV.mclear()" style="background:none;border:none;color:#bcae97;font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline">Seçimi temizle</button>
-          <span style="flex:1;min-width:160px;text-align:right;font-size:12.5px;color:#bcae97">${S.esc(listTxt)}</span>
-        </div></div>`;
-    }
-
     const st = S.status;
     const dot = { ok: '#5F9269', sync: '#C1913F', err: '#B65449', idle: '#a8987c' }[st.kind] || '#a8987c';
+    const toastHtml = V.toast ? `<div class="d-toast"><span>${S.esc(V.toast.msg)}</span>${V.toast.undo ? '<button onclick="DV.undo()">Geri al</button>' : ''}</div>` : '';
 
     document.getElementById('app').innerHTML = `
     <div class="d-app"><div class="d-wrap">
@@ -285,38 +424,78 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
 
       ${todayCard}
 
-      <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-        <button onclick="DV.multi()" style="background:${V.multi ? 'var(--acc)' : 'var(--card)'};border:1px solid ${V.multi ? 'var(--acc)' : '#d9ccb5'};color:${V.multi ? '#fff' : '#6b5f4d'};border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;cursor:pointer">+ Çoklu gün / aralık</button>
-        <button onclick="Store.sync()" title="Şimdi eşitle" style="display:inline-flex;align-items:center;gap:7px;background:var(--card);border:1px solid #d9ccb5;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;color:#6b5f4d;cursor:pointer">
-          <span style="width:8px;height:8px;border-radius:50%;background:${dot}"></span>${S.esc(st.text)}</button>
-        <button onclick="DV.settings()" style="background:var(--card);border:1px solid #d9ccb5;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;color:#6b5f4d;cursor:pointer">Senkron ayarları</button>
-        <button onclick="Store.exportJSON()" style="background:var(--card);border:1px solid #d9ccb5;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;color:#6b5f4d;cursor:pointer">Yedek indir</button>
-        <label style="background:var(--card);border:1px solid #d9ccb5;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;color:#6b5f4d;cursor:pointer">Yedek yükle<input type="file" accept="application/json" onchange="DV.import(this)" style="display:none"></label>
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:12px">
+        <input id="dQuick" class="d-in" style="flex:1;min-width:260px" placeholder="Hızlı ekle — “28 eyl 19:00 Özge yemek” yazıp Enter"
+          onkeydown="if(event.key==='Enter'){DV.quick(this.value)}">
+        <div style="position:relative;min-width:210px">
+          <input id="dSearch" class="d-in" style="width:100%" placeholder="Ara…" value="${S.escAttr(V.q)}" oninput="DV.search(this.value)">
+          ${resHtml}
+        </div>
+        <button class="d-btn" onclick="DV.multi()" style="${V.multi ? 'background:var(--acc);border-color:var(--acc);color:#fff' : ''}">+ Çoklu gün / aralık</button>
+        <button class="d-btn" onclick="DV.toolsToggle()" style="display:inline-flex;align-items:center;gap:7px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${dot}"></span>Araçlar</button>
       </div>
 
+      ${legend}
       ${multiBar}
       <div class="yc-grid">${monthsHtml}</div>
-      <div style="text-align:center;margin-top:22px;font-size:12.5px;color:var(--mut)">Bir güne tıklayıp kayıt ekleyin · değişiklikler otomatik kaydedilir ve telefonla eşitlenir</div>
-    </div></div>${drawer}${yearModal}${setPanel}`;
+      <div style="text-align:center;margin-top:22px;font-size:12.5px;color:var(--mut)">Bir güne tıklayıp kayıt ekleyin · renk şeridine tıklayınca o renk öne çıkar</div>
+    </div></div>${drawer}${yearModal}${toolsModal}${setPanel}${toastHtml}`;
+
+    applyHl();
+    if (V.qFocus) {
+      const el = document.getElementById('dSearch');
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+      V.qFocus = false;
+    }
+  }
+
+  /* ---------- renk vurgusu ---------- */
+  function applyHl() {
+    let el = document.getElementById('dHlStyle');
+    if (!el) { el = document.createElement('style'); el.id = 'dHlStyle'; document.head.appendChild(el); }
+    const id = V.hlHoverId || V.hl;
+    el.textContent = id ? `.d-app .d-cell[data-c]:not([data-c="${id}"]){opacity:.16}` : '';
   }
 
   const DV = {
     year(y) { V.year = y; V.yearPick = false; render(); },
     yearPick() { V.yearPick = !V.yearPick; render(); },
+    toolsToggle() { V.tools = !V.tools; render(); },
+    hl(id, click) { V.hl = (V.hl === id || !id) ? null : id; V.hlHoverId = null; render(); },
+    hlHover(id) { V.hlHoverId = id; applyHl(); },
     cell(k) { if (V.multi) DV.pick(k); else DV.open(k); },
+    goto(date) { V.year = Number(date.slice(0, 4)); V.q = ''; DV.open(date); },
+    search(q) {
+      V.q = q; V.qFocus = true;
+      clearTimeout(DV._t); DV._t = setTimeout(render, 160);
+    },
+    quick(val) {
+      const r = parseQuick(val);
+      if (!r) { toast('Anlaşılmadı — “28 eyl 19:00 başlık” gibi yazın'); return; }
+      S.addEvent({ date: r.date, time: r.time, text: r.text, cat: V.draft.cat || 'mavi' });
+      V.year = Number(r.date.slice(0, 4));
+      const p = S.parseKey(r.date);
+      render();
+      const el = document.getElementById('dQuick'); if (el) { el.value = ''; el.focus(); }
+      toast('Eklendi · ' + p.d + ' ' + S.MONTHS_SHORT[p.m] + (r.time ? ' ' + r.time : ''));
+    },
+
+    /* çoklu gün */
     multi() {
-      V.multi = V.multi ? null : { dates: [], text: '', cat: 'mavi', time: '', from: '', to: '', weekdays: false };
+      V.multi = V.multi ? null : { dates: [], text: '', cat: V.draft.cat || 'mavi', time: '', from: '', to: '', wd: [1, 1, 1, 1, 1, 1, 1] };
       V.selected = null; render();
     },
     mgrab() {
       if (!V.multi) return;
-      const t = document.getElementById('mText'); if (t) V.multi.text = t.value;
-      const h = document.getElementById('mTime'); if (h) V.multi.time = h.value;
-      const f = document.getElementById('mFrom'); if (f) V.multi.from = f.value;
-      const o = document.getElementById('mTo'); if (o) V.multi.to = o.value;
-      const w = document.getElementById('mWd'); if (w) V.multi.weekdays = w.checked;
+      const g = id => document.getElementById(id);
+      if (g('mText')) V.multi.text = g('mText').value;
+      if (g('mTime')) V.multi.time = g('mTime').value;
+      if (g('mFrom')) V.multi.from = g('mFrom').value;
+      if (g('mTo')) V.multi.to = g('mTo').value;
     },
     mset(k, v) { DV.mgrab(); V.multi[k] = v; render(); },
+    mwd(i) { DV.mgrab(); V.multi.wd[i] = V.multi.wd[i] ? 0 : 1; render(); },
     pick(k) {
       DV.mgrab();
       const i = V.multi.dates.indexOf(k);
@@ -326,46 +505,67 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
     mrange() {
       DV.mgrab();
       const a = V.multi.from, b = V.multi.to;
-      if (!a || !b || b < a) { alert('Geçerli bir başlangıç ve bitiş tarihi seçin.'); return; }
-      let k = a, guard = 0;
+      if (!a || !b || b < a) { toast('Geçerli bir başlangıç ve bitiş tarihi seçin'); return; }
+      let k = a, guard = 0, added = 0;
       while (k <= b && guard++ < 1500) {
-        const wd = S.weekday(k);
-        if (!(V.multi.weekdays && wd >= 5) && V.multi.dates.indexOf(k) < 0) V.multi.dates.push(k);
+        if (V.multi.wd[S.weekday(k)] && V.multi.dates.indexOf(k) < 0) { V.multi.dates.push(k); added++; }
         k = S.shiftKey(k, 1);
       }
       V.multi.dates.sort(); render();
+      if (!added) toast('Bu aralıkta seçili günlerden yok');
     },
     mclear() { DV.mgrab(); V.multi.dates = []; render(); },
     msave() {
       DV.mgrab();
       const M = V.multi;
-      if (!M.dates.length) return;
+      if (!M.dates.length) { toast('Önce gün seçin'); return; }
+      const n = M.dates.length;
       S.addEvents(M.dates, { text: (M.text || '').trim() || 'Yeni kayıt', cat: M.cat, time: M.time });
-      const first = M.dates[0];
-      V.year = Number(first.slice(0, 4));
+      V.year = Number(M.dates[0].slice(0, 4));
       V.multi = null; render();
+      toast(n + ' güne eklendi');
     },
-    open(k) { V.selected = k; V.draft = { text: '', cat: V.draft.cat || 'mavi', time: '' }; render(); },
+
+    /* gün paneli */
+    open(k) { V.selected = k; V.draft = { text: '', cat: V.draft.cat || 'mavi', time: '', note: '' }; render(); },
     close() { V.selected = null; render(); },
     countdown(v) { S.setCountdown(v); },
     target() { if (V.selected) S.setCountdown(V.selected); },
     draftText(v) { V.draft.text = v; },
+    draftNote(v) { V.draft.note = v; },
     draft(k, v) {
       const t = document.getElementById('dText'); if (t) V.draft.text = t.value;
+      const nt = document.getElementById('dNote'); if (nt) V.draft.note = nt.value;
       V.draft[k] = v; render();
     },
     add() {
       const t = document.getElementById('dText'); if (t) V.draft.text = t.value;
+      const nt = document.getElementById('dNote'); if (nt) V.draft.note = nt.value;
       S.addEvent({
-        date: V.selected, time: V.draft.time,
+        date: V.selected, time: V.draft.time, note: (V.draft.note || '').trim(),
         text: (V.draft.text || '').trim() || 'Yeni kayıt', cat: V.draft.cat
       });
-      V.draft.text = ''; render();
+      V.draft.text = ''; V.draft.note = ''; render();
     },
-    del(id) { S.deleteEvent(id); },
+    del(id) { S.deleteEvent(id); render(); toast('Kayıt silindi', true); },
     delGroup(gid) {
       const n = S.groupCount(gid);
-      if (confirm('Bu kaydın ' + n + ' günü birden silinsin mi?')) S.deleteGroup(gid);
+      S.deleteGroup(gid); render();
+      toast(n + ' gün silindi', true);
+    },
+    undo() { const n = S.undo(); V.toast = null; render(); if (n) toast(n + ' kayıt geri alındı'); },
+
+    /* araçlar */
+    ics() {
+      const list = S.data.events.filter(e => e.date.slice(0, 4) === String(V.year));
+      if (!list.length) { toast('Bu yılda kayıt yok'); return; }
+      S.downloadICS(list, 'ajanda-' + V.year);
+      V.tools = false; render(); toast(list.length + ' kayıt .ics olarak indirildi');
+    },
+    icsAll() {
+      if (!S.data.events.length) { toast('Kayıt yok'); return; }
+      S.downloadICS(null, 'ajanda-tum');
+      V.tools = false; render(); toast(S.data.events.length + ' kayıt .ics olarak indirildi');
     },
     settings() { V.setOpen = !V.setOpen; render(); },
     saveCfg() {
@@ -375,7 +575,10 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
     import(input) {
       const f = input.files && input.files[0]; if (!f) return;
       const r = new FileReader();
-      r.onload = () => { try { const n = S.importJSON(r.result); alert(n + ' kayıt yüklendi.'); render(); } catch (e) { alert('Yedek okunamadı: ' + e.message); } };
+      r.onload = () => {
+        try { const n = S.importJSON(r.result); V.tools = false; render(); toast(n + ' kayıt yüklendi'); }
+        catch (e) { toast('Yedek okunamadı'); }
+      };
       r.readAsText(f); input.value = '';
     }
   };

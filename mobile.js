@@ -96,6 +96,15 @@ body[data-ui="mobile"] #app{
 .mob .pbar{width:3px;height:26px;border-radius:2px;flex:none}
 .mob .pttl{font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mob .pwhen{font-size:11.5px;color:var(--m5);margin-top:1px}
+.mob .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:18px}
+.mob .lg{display:inline-flex;align-items:center;gap:6px;background:var(--card);border-radius:20px;padding:6px 11px 6px 9px;font-size:12px;font-weight:600;color:var(--m6);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.mob .lg.on{background:var(--ink);color:var(--paper)}
+.mob .lg i{width:9px;height:9px;border-radius:999px;display:block}
+.mob .lg b{font-weight:700;opacity:.55}
+.mob .dim{opacity:.16}
+.mob .srow{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:14px;width:100%;text-align:left;margin-bottom:8px}
+.mob .toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px}
+.mob .toast.act button{all:unset;cursor:pointer;background:rgba(246,245,242,.16);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700}
 .mob .empty{padding:26px 4px;text-align:center;font-size:13px;color:var(--m5);line-height:1.5}
 .mob .ghost{margin-top:10px;padding:15px;border-radius:18px;background:var(--m1);text-align:center;font-size:14px;font-weight:600;color:var(--m6);width:100%;display:block}
 .mob .ghost:active{background:var(--m2)}
@@ -180,7 +189,7 @@ body[data-ui="mobile"] #app{
     V = {
       level: loadLevel(),
       y: TODAY.getFullYear(), m: TODAY.getMonth(), week: startOfWeek(TODAY),
-      anim: 'zin'
+      anim: 'zin', hl: null
     };
   }
 
@@ -220,7 +229,7 @@ body[data-ui="mobile"] #app{
       V.anim = 'zin'; render();
     };
     $('mAdd').onclick = () => openSheet(null, defaultDate());
-    $('mKicker').onclick = openSettings;
+    $('mKicker').onclick = openSearch;
     bindGestures();
   }
 
@@ -320,7 +329,8 @@ body[data-ui="mobile"] #app{
           bg = evs.length ? evs[0].color : INK;
           if (evs.length) ring = 'box-shadow:inset 0 0 0 1.5px ' + INK + ';';
         }
-        cells += `<div class="ycell" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>`;
+        const dim = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
+        cells += `<div class="ycell${dim}" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>`;
       }
       el.innerHTML = `<div class="ymo-h">
           <div class="ymo-n" style="color:${isCur ? GREEN : (monthPast ? 'rgba(27,26,24,.34)' : INK)}">${MONTHS[m]}</div>
@@ -329,11 +339,31 @@ body[data-ui="mobile"] #app{
       el.onclick = () => { V.m = m; go('ay', 'zin'); };
       wrap.appendChild(el);
     }
-    return wrap;
+    const frag = document.createDocumentFragment();
+    frag.appendChild(wrap);
+    const lg = legendEl(); if (lg) frag.appendChild(lg);
+    return frag;
+  }
+
+  /* renk lejantı — dokununca o renk öne çıkar */
+  function legendEl() {
+    const use = S.colorUsage().filter(c => c.n);
+    if (!use.length) return null;
+    const box = document.createElement('div');
+    box.className = 'legend';
+    use.forEach(c => {
+      const b = document.createElement('button');
+      b.className = 'lg' + (V.hl === c.id ? ' on' : '');
+      b.innerHTML = `<i style="background:${c.color}"></i>${esc(c.name)} <b>${c.n}</b>`;
+      b.onclick = e => { e.stopPropagation(); V.hl = V.hl === c.id ? null : c.id; render(); };
+      box.appendChild(b);
+    });
+    return box;
   }
 
   /* ---------------- ay ---------------- */
   function viewMonth() {
+    const gdays = S.groupDays();
     const frag = document.createDocumentFragment();
     const box = document.createElement('div'); box.className = V.anim;
     box.innerHTML = `<div class="dows">${DOW.map(d => `<div>${d}</div>`).join('')}</div><div class="mrows"></div>`;
@@ -369,8 +399,24 @@ body[data-ui="mobile"] #app{
           bg = evs.length ? evs[0].color : GREEN;
           if (evs.length) ring = `box-shadow:inset 0 0 0 2px ${GREEN};`;
         }
+        /* seri şeridi: aynı gid'in dünü/yarını varsa hücre arkası bantlansın */
+        let bandL = false, bandR = false, bandCol = '';
+        const wdi = (firstDow(V.y, V.m) + d - 1) % 7;
+        for (let j = 0; j < evs.length; j++) {
+          const g = evs[j].gid && gdays[evs[j].gid];
+          if (!g) continue;
+          if (wdi > 0 && g[S.shiftKey(k, -1)]) { bandL = true; bandCol = evs[j].color; }
+          if (wdi < 6 && g[S.shiftKey(k, 1)]) { bandR = true; bandCol = evs[j].color; }
+        }
+        let band = '';
+        if (bandCol) {
+          const bc = past ? 'rgba(27,26,24,.07)' : S.rgba(bandCol, .2);
+          const rl = bandL ? '0' : '999px', rr = bandR ? '0' : '999px';
+          band = `background:${bc};border-radius:${rl} ${rr} ${rr} ${rl};`;
+        }
+        const dimc = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
         const dots = dotCols.map(c => `<div class="mdot" style="background:${c}"></div>`).join('');
-        return `<div class="mcell">
+        return `<div class="mcell${dimc}" style="${band}">
           <div class="mnum" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>
           <div class="mdots">${dots}</div></div>`;
       }).join('');
@@ -388,9 +434,16 @@ body[data-ui="mobile"] #app{
     if (!up.length) {
       list.innerHTML = '<div class="empty">Önümüzdeki 30 günde kayıt yok.<br>Sağ üstteki + ile ekle.</div>';
     } else {
-      up.forEach(e => {
-        const dt = parseISO(e.date);
-        const when = (sameDay(dt, TODAY) ? 'Bugün' : sameDay(dt, addDays(TODAY, 1)) ? 'Yarın' : `${dt.getDate()} ${SHORT[dt.getMonth()]} ${DOW[dowMon(dt)]}`) + (e.time ? ' · ' + e.time : '');
+      up.forEach(it => {
+        const e = it.ev, dt = parseISO(e.date);
+        let when;
+        if (it.count > 1) {
+          when = S.spanLabel(it);
+        } else {
+          when = sameDay(dt, TODAY) ? 'Bugün' : sameDay(dt, addDays(TODAY, 1)) ? 'Yarın'
+            : `${dt.getDate()} ${SHORT[dt.getMonth()]} ${DOW[dowMon(dt)]}`;
+        }
+        if (e.time) when += ' · ' + e.time;
         const b = document.createElement('button'); b.className = 'pcard';
         b.innerHTML = `<div class="pbar" style="background:${e.color}"></div>
           <div style="flex:1;min-width:0"><div class="pttl">${esc(e.text)}</div><div class="pwhen">${when}</div></div>`;
@@ -399,15 +452,17 @@ body[data-ui="mobile"] #app{
       });
     }
     frag.appendChild(list);
+    const lg = legendEl(); if (lg) frag.appendChild(lg);
     return frag;
   }
   function upcoming(limit) {
     const out = [];
-    for (let i = 0; i < 31 && out.length < limit; i++) {
+    for (let i = 0; i < 90; i++) {
       const dt = addDays(TODAY, i);
       dayEvents(dt.getFullYear(), dt.getMonth(), dt.getDate()).forEach(e => out.push(e));
+      if (S.collapse(out).length >= limit + 2) break;
     }
-    return out.slice(0, limit);
+    return S.collapse(out).slice(0, limit);
   }
 
   /* ---------------- hafta ---------------- */
@@ -429,7 +484,7 @@ body[data-ui="mobile"] #app{
         const b = document.createElement('button'); b.className = 'ev';
         b.innerHTML = `<div class="ev-c" style="background:${past ? 'rgba(27,26,24,.28)' : e.color}"></div>
           <div class="ev-t tnum">${esc(e.time || '—')}</div>
-          <div class="ev-n">${esc(e.text)}</div>`;
+          <div class="ev-n">${esc(e.text)}${e.note ? ' <span style="opacity:.4;font-weight:500">· ' + esc(e.note) + '</span>' : ''}</div>`;
         b.onclick = () => openSheet(e, e.date);
         right.appendChild(b);
       });
@@ -496,20 +551,26 @@ body[data-ui="mobile"] #app{
   }
 
   let toastT = null;
-  function toast(msg) {
+  function toast(msg, undo) {
     const host = $('mToastHost');
-    host.innerHTML = `<div class="toast">${esc(msg)}</div>`;
+    host.innerHTML = `<div class="toast${undo ? ' act' : ''}"><span>${esc(msg)}</span>${undo ? '<button id="mUndo">Geri al</button>' : ''}</div>`;
+    if (undo) $('mUndo').onclick = () => {
+      const n = S.undo(); host.innerHTML = ''; render();
+      if (n) toast(n + ' kayıt geri geldi');
+    };
     clearTimeout(toastT);
-    toastT = setTimeout(() => host.innerHTML = '', 1900);
+    toastT = setTimeout(() => host.innerHTML = '', undo ? 6000 : 1900);
   }
   /* ---------------- kayıt sheet'i ---------------- */
   function openSheet(ev, date) {
     const editing = !!ev;
+    const fav = S.colorUsage().filter(c => c.n).slice(0, 6);
     let dr = {
       title: ev ? ev.text : '',
+      note: ev ? (ev.note || '') : '',
       date: ev ? ev.date : date,
       time: ev ? (ev.time || '10:00') : '10:00',
-      cat: ev ? ev.cat : 'mavi'
+      cat: ev ? ev.cat : (fav[0] ? fav[0].id : 'mavi')
     };
     const box = document.createElement('div');
     const draw = () => {
@@ -520,12 +581,18 @@ body[data-ui="mobile"] #app{
       <div class="field">
         <input class="inp" id="fTitle" placeholder="Ne yapacaksın?" value="${S.escAttr(dr.title)}">
         <div class="div"></div>
+        <input class="inp" id="fNote" placeholder="Not (isteğe bağlı)" value="${S.escAttr(dr.note)}" style="font-size:15px;font-weight:500;color:var(--m6);padding:12px 0">
+        <div class="div"></div>
         <div class="frow">
           <input type="date" class="flab" id="fDate" value="${dr.date}" style="border:0;background:transparent;outline:none;font-weight:600">
           <input class="mini tnum" id="fTime" type="time" value="${dr.time}">
         </div>
       </div>
-      <div class="lab">Renk</div>
+      ${fav.length > 2 ? `<div class="lab">Sık kullanılan</div>
+      <div class="pal" id="fFav" style="grid-template-columns:repeat(6,minmax(0,1fr))">${fav.map(c => `<button data-c="${c.id}" class="${c.id === dr.cat ? 'on' : ''}">
+          <div class="sw" style="background:${c.color};box-shadow:${c.id === dr.cat ? '0 0 0 2.5px ' + INK : 'inset 0 0 0 1px rgba(27,26,24,.08)'}"></div>
+          <div class="nm">${esc(c.name)}</div></button>`).join('')}</div>` : ''}
+      <div class="lab">${fav.length > 2 ? 'Tüm renkler' : 'Renk'}</div>
       <div class="pal" id="fPal">${S.data.cats.map(c => `<button data-c="${c.id}" class="${c.id === dr.cat ? 'on' : ''}">
           <div class="sw" style="background:${c.color};box-shadow:${c.id === dr.cat ? '0 0 0 2.5px ' + INK : 'inset 0 0 0 1px rgba(27,26,24,.08)'}"></div>
           <div class="nm">${esc(c.name)}</div></button>`).join('')}</div>
@@ -537,21 +604,25 @@ body[data-ui="mobile"] #app{
       box.querySelector('.sh-x').onclick = closeSheet;
       const grab = () => {
         dr.title = box.querySelector('#fTitle').value;
+        dr.note = box.querySelector('#fNote').value;
         dr.date = box.querySelector('#fDate').value || dr.date;
         dr.time = box.querySelector('#fTime').value || '';
       };
-      box.querySelector('#fPal').querySelectorAll('button').forEach(b => b.onclick = () => { grab(); dr.cat = b.dataset.c; draw(); });
+      const pickCat = b => b.onclick = () => { grab(); dr.cat = b.dataset.c; draw(); };
+      box.querySelector('#fPal').querySelectorAll('button').forEach(pickCat);
+      const favBox = box.querySelector('#fFav');
+      if (favBox) favBox.querySelectorAll('button').forEach(pickCat);
       box.querySelector('#fSave').onclick = () => { grab(); commit(); };
       const del = box.querySelector('#fDel');
-      if (del) del.onclick = () => { S.deleteEvent(ev.id); closeSheet(); render(); toast('Kayıt silindi'); };
+      if (del) del.onclick = () => { S.deleteEvent(ev.id); closeSheet(); render(); toast('Kayıt silindi', true); };
       const delG = box.querySelector('#fDelG');
       if (delG) delG.onclick = () => {
-        const n = S.deleteGroup(ev.gid); closeSheet(); render(); toast(n + ' gün silindi');
+        const n = S.deleteGroup(ev.gid); closeSheet(); render(); toast(n + ' gün silindi', true);
       };
     };
     const commit = () => {
       if (!dr.title.trim()) dr.title = 'Yeni kayıt';
-      const payload = { date: dr.date, time: dr.time, text: dr.title.trim(), cat: dr.cat };
+      const payload = { date: dr.date, time: dr.time, text: dr.title.trim(), note: (dr.note || '').trim(), cat: dr.cat };
       if (editing) S.updateEvent(ev.id, payload); else S.addEvent(payload);
       closeSheet();
       const dt = parseISO(dr.date);
@@ -607,6 +678,47 @@ body[data-ui="mobile"] #app{
     draw(); sheet(box);
   }
 
+  /* ---------------- arama ---------------- */
+  function openSearch() {
+    const box = document.createElement('div');
+    let q = '';
+    const draw = keepFocus => {
+      const res = S.search(q, 40);
+      box.innerHTML = `<div class="grab"></div>
+        <div class="sh-h"><div class="sh-t">Ara</div><button class="sh-x">Vazgeç</button></div>
+        <div class="field"><input class="inp" id="qIn" placeholder="Kayıtlarda ara…" value="${S.escAttr(q)}" autocomplete="off"></div>
+        <div style="margin-top:14px">${q.trim().length < 2
+        ? '<div class="empty">En az iki harf yazın. Tüm yıllarda aranır.</div>'
+        : (res.length ? res.map(e => {
+          const p = S.parseKey(e.date), c = S.cat(e.cat);
+          return `<button class="srow" data-d="${e.date}">
+              <span style="width:9px;height:9px;border-radius:999px;background:${c.color};flex:none"></span>
+              <span style="flex:1;min-width:0"><span style="display:block;font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.text)}</span>
+              <span style="display:block;font-size:12px;color:var(--m5);margin-top:1px">${p.d} ${SHORT[p.m]} ${p.y}${e.time ? ' · ' + e.time : ''}</span></span></button>`;
+        }).join('') : '<div class="empty">Eşleşen kayıt yok.</div>')}</div>
+        <div class="lab">Diğer</div>
+        <button class="ghost" id="qIcs">Takvime aktar (.ics)</button>
+        <button class="ghost" id="qSet">Ayarlar ve eşitleme</button>`;
+      box.querySelector('.sh-x').onclick = closeSheet;
+      const inp = box.querySelector('#qIn');
+      inp.oninput = () => { q = inp.value; clearTimeout(draw._t); draw._t = setTimeout(() => draw(true), 180); };
+      box.querySelectorAll('.srow').forEach(b => b.onclick = () => {
+        const d = b.dataset.d, p = S.parseKey(d);
+        V.y = p.y; V.m = p.m; V.week = startOfWeek(parseISO(d));
+        if (V.level === 'yil') V.level = 'ay';
+        closeSheet(); render();
+      });
+      box.querySelector('#qIcs').onclick = () => {
+        if (!S.data.events.length) { toast('Kayıt yok'); return; }
+        S.downloadICS(null, 'ajanda'); closeSheet(); toast('.ics indirildi — Takvim\'e ekleyin');
+      };
+      box.querySelector('#qSet').onclick = () => { closeSheet(); openSettings(); };
+      if (keepFocus) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    };
+    draw(); sheet(box);
+    setTimeout(() => { const i = box.querySelector('#qIn'); if (i) i.focus(); }, 300);
+  }
+
   /* ---------------- ayarlar ---------------- */
   function openSettings() {
     const box = document.createElement('div');
@@ -623,6 +735,7 @@ body[data-ui="mobile"] #app{
         <button class="save" id="sSave" style="background:${GREEN}">Kaydet ve eşitle</button>
         <div class="note">${esc(st.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
         <div class="lab">Yedek</div>
+        <button class="ghost" id="sIcs">Takvime aktar (.ics)</button>
         <button class="ghost" id="sExp">Yedeği indir</button>
         <label class="ghost" style="cursor:pointer">Yedek yükle<input type="file" accept="application/json" id="sImp" style="display:none"></label>
         <div class="note">Kayıtlar telefonda saklanır; GitHub üzerinden bilgisayarla eşitlenir.</div>`;
@@ -631,6 +744,7 @@ body[data-ui="mobile"] #app{
         S.setCfg({ token: box.querySelector('#sTok').value.trim(), gist: box.querySelector('#sGist').value.trim() });
         S.sync().then(ok => { toast(ok ? 'Eşitlendi' : S.status.text); draw(); });
       };
+      box.querySelector('#sIcs').onclick = () => { S.downloadICS(null, 'ajanda'); toast('.ics indirildi'); };
       box.querySelector('#sExp').onclick = () => S.exportJSON();
       box.querySelector('#sImp').onchange = function () {
         const f = this.files && this.files[0]; if (!f) return;
