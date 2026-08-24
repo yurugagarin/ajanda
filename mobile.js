@@ -530,7 +530,8 @@ body[data-ui="mobile"] #app{
           <div class="sw" style="background:${c.color};box-shadow:${c.id === dr.cat ? '0 0 0 2.5px ' + INK : 'inset 0 0 0 1px rgba(27,26,24,.08)'}"></div>
           <div class="nm">${esc(c.name)}</div></button>`).join('')}</div>
       <button class="save" id="fSave" style="background:${color}">Kaydet</button>
-      ${editing ? '<button class="del" id="fDel">Kaydı sil</button>' : ''}
+      ${editing ? '<button class="del" id="fDel">Bu günü sil</button>' : ''}
+      ${editing && ev.gid && S.groupCount(ev.gid) > 1 ? `<button class="del" id="fDelG">Serinin tümünü sil (${S.groupCount(ev.gid)} gün)</button>` : ''}
       <div class="note">Yıl görünümünde o gün bu renkle işaretlenir</div>`;
 
       box.querySelector('.sh-x').onclick = closeSheet;
@@ -543,6 +544,10 @@ body[data-ui="mobile"] #app{
       box.querySelector('#fSave').onclick = () => { grab(); commit(); };
       const del = box.querySelector('#fDel');
       if (del) del.onclick = () => { S.deleteEvent(ev.id); closeSheet(); render(); toast('Kayıt silindi'); };
+      const delG = box.querySelector('#fDelG');
+      if (delG) delG.onclick = () => {
+        const n = S.deleteGroup(ev.gid); closeSheet(); render(); toast(n + ' gün silindi');
+      };
     };
     const commit = () => {
       if (!dr.title.trim()) dr.title = 'Yeni kayıt';

@@ -227,6 +227,27 @@ var Store = (function () {
     const e = Object.assign({ id: uid('e'), date: todayKey(), time: '', text: '', cat: 'mavi', amtType: 'none', amt: 0 }, ev);
     e.mt = now(); D.events.push(e); commit(); return e;
   }
+  /* birden çok güne aynı kaydı ekler (seri = gid) */
+  function addEvents(dates, base) {
+    const gid = uid('g'), t = now();
+    (dates || []).forEach(d => {
+      D.events.push(Object.assign(
+        { id: uid('e'), time: '', text: '', cat: 'mavi', amtType: 'none', amt: 0 },
+        base || {}, { date: d, gid: gid, mt: t }));
+    });
+    commit();
+    return gid;
+  }
+  function groupCount(gid) { return gid ? D.events.filter(e => e.gid === gid).length : 0; }
+  function deleteGroup(gid) {
+    if (!gid) return 0;
+    const ids = D.events.filter(e => e.gid === gid).map(e => e.id);
+    D.events = D.events.filter(e => e.gid !== gid);
+    const t = now(); ids.forEach(id => D.deleted[id] = t);
+    commit();
+    return ids.length;
+  }
+
   function updateEvent(id, patch) {
     D.events = D.events.map(e => e.id === id ? Object.assign({}, e, patch, { mt: now() }) : e);
     commit();
@@ -408,7 +429,7 @@ var Store = (function () {
     on, emit, commit, persist,
     dkey, todayKey, shiftKey, parseKey, weekday, esc, escAttr, rgba, money, uid, pad,
     catMap, habitMap, cat, eventsByDate, eventsOn, byTime,
-    addEvent, updateEvent, deleteEvent, updateCat, addCat, setCountdown,
+    addEvent, addEvents, groupCount, deleteGroup, updateEvent, deleteEvent, updateCat, addCat, setCountdown,
     doneOn, toggleHabit, habitStreak, updateHabit, addHabit, deleteHabit,
     totals, exportJSON, importJSON,
     cfg, setCfg, sync, createGist, startAuto,
