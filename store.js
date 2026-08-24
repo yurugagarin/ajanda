@@ -40,7 +40,7 @@ var Store = (function () {
     { id: 'kapanis', name: 'Kapanış', color: COLOR.kirmizi },
     { id: 'almanca', name: 'Almanca kursu', color: COLOR.mor }
   ];
-  const CAT_VERSION = 5;
+  const CAT_VERSION = 6;
 
   /* eski 18 renkli düzenden kategoriye geçiş haritası */
   const OLD_PAL_TO_CAT = {
@@ -178,6 +178,10 @@ var Store = (function () {
     /* varsayılan kategoriler eksikse tamamla (silinmemişse) */
     const has = {}; D.cats.forEach(c => has[c.id] = 1);
     DEFAULT_CATS.forEach((c, i) => { if (!has[c.id] && !D.deleted[c.id]) D.cats.push({ id: c.id, name: c.name, color: c.color, o: i, mt: 0 }); });
+    /* silinen kategoriler geri gelmesin */
+    D.cats = D.cats.filter(c => !D.deleted[c.id]);
+    /* aynı adlı kategoriler her yüklemede teke iner */
+    dedupeCats(D);
     /* kategorisi kaybolan kayıtları Genel'e al */
     const live = {}; D.cats.forEach(c => live[c.id] = 1);
     D.events = D.events.map(e => live[e.cat] ? e : Object.assign({}, e, { cat: 'genel' }));
@@ -185,28 +189,42 @@ var Store = (function () {
 
   }
 
-  /* 18 renkli düzenden kategori düzenine geçiş */
+  /* 18 renkli düzenden kategori düzenine geçiş.
+     Not: taşınan kayıtlara mt:0 verilir — böylece senin sonradan yaptığın
+     düzenlemeler (mt: şimdi) her zaman kazanır ve eşitlemede geri gelmez. */
   function migrateCats(D) {
     const out = DEFAULT_CATS.map((c, i) => ({ id: c.id, name: c.name, color: c.color, o: i, mt: 0 }));
     const byId = {}; out.forEach(c => byId[c.id] = 1);
     (D.cats || []).forEach(c => {
-      if (byId[c.id]) return;
-      if (OLD_PAL_TO_CAT[c.id]) {
-        /* kullanıcı bu renge kendi adını verdiyse ayrı kategori olarak korunur */
-        if (c.name && c.name !== OLD_PAL_NAMES[c.id]) {
-          const target = OLD_PAL_TO_CAT[c.id];
-          const t = out.filter(x => x.id === target)[0];
-          out.push({ id: c.id, name: c.name, color: (t ? t.color : nearestColor(c.color)), o: out.length, mt: now() });
-          byId[c.id] = 1;
-        }
-      } else {
-        out.push({ id: c.id, name: c.name, color: nearestColor(c.color), o: out.length, mt: now() });
-        byId[c.id] = 1;
-      }
+      if (byId[c.id]) return;              /* varsayılan zaten var */
+      if (OLD_PAL_TO_CAT[c.id]) return;    /* eski renk slotu — kategoriye taşınıyor */
+      out.push({ id: c.id, name: c.name, color: nearestColor(c.color), o: out.length, mt: 0 });
+      byId[c.id] = 1;
     });
     D.cats = out;
     D.events = (D.events || []).map(e => byId[e.cat] ? e : Object.assign({}, e, { cat: OLD_PAL_TO_CAT[e.cat] || 'genel' }));
+    dedupeCats(D);
     D.cv = CAT_VERSION;
+  }
+
+  /* aynı ada sahip kategorileri teke indir — varsayılan kimlik korunur */
+  function dedupeCats(D) {
+    const norm = x => String(x || '').toLocaleLowerCase('tr').replace(/[\s\/\-·&,\.]+/g, '');
+    const isDefault = {}; DEFAULT_CATS.forEach(c => isDefault[c.id] = 1);
+    /* varsayılanlar önce gelsin ki mükerrerde onlar kalsın */
+    const list = (D.cats || []).slice().sort((a, b) => (isDefault[b.id] ? 1 : 0) - (isDefault[a.id] ? 1 : 0));
+    const seen = {}, keepIds = {}, remap = {};
+    list.forEach(c => {
+      const k = norm(c.name);
+      if (!k) { keepIds[c.id] = 1; return; }
+      if (seen[k] && seen[k] !== c.id) remap[c.id] = seen[k];
+      else { seen[k] = c.id; keepIds[c.id] = 1; }
+    });
+    if (!Object.keys(remap).length) return false;
+    D.cats = (D.cats || []).filter(c => keepIds[c.id]);
+    D.events = (D.events || []).map(e => remap[e.cat] ? Object.assign({}, e, { cat: remap[e.cat], mt: now() }) : e);
+    Object.keys(remap).forEach(id => { D.deleted[id] = now(); });
+    return true;
   }
 
   /* ---------- yükle / kaydet ---------- */
@@ -254,7 +272,7 @@ var Store = (function () {
     a.cats.forEach(c => cm[c.id] = c);
     b.cats.forEach(c => { const x = cm[c.id]; if (!x || (c.mt || 0) > (x.mt || 0)) cm[c.id] = c; });
     out.cats = Object.keys(cm).map(k => cm[k])
-      .filter(c => !(out.deleted[c.id] && out.deleted[c.id] >= (c.mt || 0)))
+      .filter(c => !out.deleted[c.id])
       .sort((x, y) => (x.o || 0) - (y.o || 0));
 
     if ((b.habitsMt || 0) > (a.habitsMt || 0)) { out.habits = b.habits; out.habitsMt = b.habitsMt || 0; }
@@ -358,8 +376,11 @@ var Store = (function () {
     return D.cats.map(c => ({ id: c.id, name: c.name, color: c.color, n: n[c.id] || 0 }))
       .sort((a, b) => b.n - a.n || (a.o || 0) - (b.o || 0));
   }
-  function eventsInCat(id) {
-    return D.events.filter(e => e.cat === id).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : byTime(a, b));
+  function eventsInCat(id, when) {
+    const t = todayKey();
+    return D.events
+      .filter(e => e.cat === id && (when === 'past' ? e.date < t : when === 'all' ? true : e.date >= t))
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : byTime(a, b));
   }
   function setCountdown(v) { D.countdown = { v: v, mt: now() }; commit(); }
 

@@ -149,7 +149,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
   function render() {
     if (V.multi && !skipGrab) grabRange();   /* dış kaynaklı çizimlerde alanları koru */
     skipGrab = false;
-    const cm = S.catMap(), byDate = S.eventsByDate(), gdays = S.groupDays();
+    const cm = S.catMap(), byDate = S.eventsByDate();
     const tKey = S.todayKey(), tp = S.parseKey(tKey);
     const cd = S.data.countdown.v;
     const picked = V.multi ? finalDates() : [];
@@ -225,14 +225,6 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         const seen = {}, colors = [];
         evs.forEach(e => { const col = (cm[e.cat] || {}).color || '#8a7f6f'; if (!seen[col]) { seen[col] = 1; colors.push(col); } });
 
-        let bandL = false, bandR = false;
-        for (let j = 0; j < evs.length; j++) {
-          const g = evs[j].gid && gdays[evs[j].gid];
-          if (!g) continue;
-          if (wd > 0 && g[S.shiftKey(k, -1)]) bandL = true;
-          if (wd < 6 && g[S.shiftKey(k, 1)]) bandR = true;
-        }
-
         let bg = weekend ? '#f1e8d7' : 'transparent', bc = 'transparent',
           numColor = weekend ? '#b09a78' : '#5a5142', dots = [], dotShadow = '';
         const isPicked = pickedSet[k];
@@ -247,11 +239,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
           dots = colors.slice(1, 4);
         }
 
-        let radius = '8px', extra = '';
-        if (bandL || bandR) {
-          radius = bandL && bandR ? '0' : (bandL ? '0 8px 8px 0' : '8px 0 0 8px');
-          extra += (bandL ? 'margin-left:-4px;border-left:none;' : '') + (bandR ? 'margin-right:-4px;border-right:none;' : '');
-        }
+        const radius = '8px', extra = '';
         let bw = '1px';
         if (isToday) { bc = '#b5552e'; bw = '1.5px'; if (!evs.length && !isPast) { bg = '#fbeede'; numColor = '#b5552e'; } }
         if (isTarget) { bc = '#e3a23f'; bw = '1.5px'; }
@@ -281,7 +269,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
     const legend = `<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:14px">
       ${shown.map(c => `<button class="d-leg ${V.filter === c.id ? 'on' : ''}" onclick="DV.filter('${c.id}')">
         <span style="width:10px;height:10px;border-radius:50%;background:${c.color};display:inline-block"></span>${S.esc(c.name)}
-        <span style="opacity:.55;font-weight:600">${c.n}</span></button>`).join('')}
+        <span style="opacity:.55;font-weight:600">${S.eventsInCat(c.id, 'future').length}</span></button>`).join('')}
       <button class="d-leg" onclick="DV.catEditToggle()" style="color:#a8987c">+ kategoriler</button>
     </div>`;
 
@@ -390,8 +378,10 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
     let filterPanel = '';
     if (V.filter && !V.selected) {
       const fc = cm[V.filter] || { name: '', color: '#8a7f6f' };
-      const list = S.eventsInCat(V.filter);
-      const grouped = S.collapse(list);
+      const past = !!V.filterPast;
+      const list = S.eventsInCat(V.filter, past ? 'past' : 'future');
+      const pastCount = S.eventsInCat(V.filter, 'past').length;
+      const grouped = past ? S.collapse(list).reverse() : S.collapse(list);
       const rows = grouped.length ? grouped.map((it, i) => {
         const ev = it.ev, p = S.parseKey(it.first);
         return `<div onclick="DV.goto('${ev.date}')" style="display:flex;align-items:flex-start;gap:11px;padding:12px 13px;background:#f3ecdd;border-radius:12px;cursor:pointer;border-left:4px solid ${fc.color};opacity:${it.last < tKey ? .55 : 1}">
@@ -400,15 +390,20 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
             <div style="font-size:14.5px;font-weight:600;white-space:pre-line;line-height:1.35">${S.esc(ev.text)}</div>
             <div style="font-size:12.5px;color:#a8987c;font-weight:600;margin-top:2px">${S.spanLabel(it)}${it.contiguous && it.count > 1 ? ' · ' + it.count + ' gün' : ''} · ${p.y}${ev.time ? ' · ' + ev.time : ''}</div>
             ${ev.note ? `<div style="font-size:12.5px;color:#8a7f6f;margin-top:3px">${S.esc(ev.note)}</div>` : ''}</div></div>`;
-      }).join('') : '<div style="text-align:center;color:#bdae93;padding:24px 0">Bu kategoride kayıt yok.</div>';
+      }).join('') : `<div style="text-align:center;color:#bdae93;padding:24px 0">${past ? 'Geçmişte kayıt yok.' : 'Bu kategoride yaklaşan kayıt yok.'}</div>`;
       filterPanel = `<div class="d-scrim" onclick="DV.filter(null)" style="z-index:38"></div>
       <div class="d-drawer" style="z-index:39">
         <div style="padding:22px 24px 18px;border-bottom:1px solid #ece1cd;display:flex;align-items:flex-start;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:10px"><span style="width:16px;height:16px;border-radius:50%;background:${fc.color};flex:none"></span>
             <div><div class="fr" style="font-size:26px;font-weight:600;line-height:1.05">${S.esc(fc.name)}</div>
-              <div style="font-size:12.5px;color:#a8987c;font-weight:600;margin-top:2px">${list.length} kayıt · tüm yıllar</div></div></div>
+              <div style="font-size:12.5px;color:#a8987c;font-weight:600;margin-top:2px">${list.length} ${past ? 'geçmiş kayıt' : 'yaklaşan kayıt'}</div></div></div>
           <button onclick="DV.filter(null)" style="background:#efe7d6;border:none;width:34px;height:34px;border-radius:50%;font-size:18px;color:#6b5f4d;cursor:pointer">×</button></div>
-        <div style="flex:1;overflow-y:auto;padding:18px 24px"><div style="display:flex;flex-direction:column;gap:9px">${rows}</div></div></div>`;
+        <div style="flex:1;overflow-y:auto;padding:18px 24px">
+          <div style="display:flex;gap:7px;margin-bottom:14px">
+            <button class="d-chip ${past ? '' : 'on'}" onclick="DV.filterWhen(false)">Yaklaşan</button>
+            <button class="d-chip ${past ? 'on' : ''}" onclick="DV.filterWhen(true)">Geçmiş${pastCount ? ' (' + pastCount + ')' : ''}</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px">${rows}</div></div></div>`;
     }
 
     /* ---- kategori yöneticisi ---- */
@@ -563,7 +558,8 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
     year(y) { V.year = y; V.yearPick = false; render(); },
     yearPick() { V.yearPick = !V.yearPick; render(); },
     toolsToggle() { V.tools = !V.tools; render(); },
-    filter(id) { V.filter = (id && V.filter !== id) ? id : null; render(); },
+    filter(id) { V.filter = (id && V.filter !== id) ? id : null; V.filterPast = false; render(); },
+    filterWhen(past) { V.filterPast = !!past; render(); },
     cell(k) { if (V.multi) DV.pick(k); else DV.open(k); },
     goto(date) { V.year = Number(date.slice(0, 4)); V.q = ''; V.filter = null; DV.open(date); },
     search(q) { V.q = q; V.qFocus = true; clearTimeout(DV._t); DV._t = setTimeout(render, 160); },

@@ -194,7 +194,7 @@ body[data-ui="mobile"] #app{
     V = {
       level: loadLevel(),
       y: TODAY.getFullYear(), m: TODAY.getMonth(), week: startOfWeek(TODAY),
-      anim: 'zin', hl: null
+      anim: 'zin', hl: null, hlPast: false
     };
   }
 
@@ -347,7 +347,10 @@ body[data-ui="mobile"] #app{
   /* seçili kategorinin tüm kayıtları */
   function catListEl() {
     const c = S.cat(V.hl);
-    const items = S.collapse(S.eventsInCat(V.hl));
+    const past = !!V.hlPast;
+    const raw = S.eventsInCat(V.hl, past ? 'past' : 'future');
+    const items = past ? S.collapse(raw).reverse() : S.collapse(raw);
+    const pastCount = S.eventsInCat(V.hl, 'past').length;
     const box = document.createElement('div');
     const hd = document.createElement('div'); hd.className = 'flt';
     hd.innerHTML = `<div class="t"><i style="background:${c.color}"></i>${esc(c.name)} <span style="color:var(--m5);font-weight:600">${items.length}</span></div>`;
@@ -355,8 +358,15 @@ body[data-ui="mobile"] #app{
     x.onclick = () => { V.hl = null; render(); };
     hd.appendChild(x);
     box.appendChild(hd);
+    const tabs = document.createElement('div');
+    tabs.className = 'cats';
+    tabs.style.marginTop = '10px';
+    tabs.innerHTML = `<button class="${past ? '' : 'on'}" data-p="0">Yaklaşan</button>
+      <button class="${past ? 'on' : ''}" data-p="1">Geçmiş${pastCount ? ' ' + pastCount : ''}</button>`;
+    tabs.querySelectorAll('button').forEach(b => b.onclick = () => { V.hlPast = b.dataset.p === '1'; render(); });
+    box.appendChild(tabs);
     const list = document.createElement('div'); list.className = 'prev';
-    if (!items.length) list.innerHTML = '<div class="empty">Bu kategoride kayıt yok.</div>';
+    if (!items.length) list.innerHTML = `<div class="empty">${past ? 'Geçmişte kayıt yok.' : 'Yaklaşan kayıt yok.'}</div>`;
     items.forEach(it => {
       const e = it.ev, p = S.parseKey(it.first);
       const b = document.createElement('button'); b.className = 'pcard';
@@ -380,8 +390,8 @@ body[data-ui="mobile"] #app{
     use.forEach(c => {
       const b = document.createElement('button');
       b.className = 'lg' + (V.hl === c.id ? ' on' : '');
-      b.innerHTML = `<i style="background:${c.color}"></i>${esc(c.name)} <b>${c.n}</b>`;
-      b.onclick = e => { e.stopPropagation(); V.hl = V.hl === c.id ? null : c.id; render(); };
+      b.innerHTML = `<i style="background:${c.color}"></i>${esc(c.name)} <b>${S.eventsInCat(c.id, 'future').length}</b>`;
+      b.onclick = e => { e.stopPropagation(); V.hl = V.hl === c.id ? null : c.id; V.hlPast = false; render(); };
       box.appendChild(b);
     });
     return box;
@@ -389,7 +399,6 @@ body[data-ui="mobile"] #app{
 
   /* ---------------- ay ---------------- */
   function viewMonth() {
-    const gdays = S.groupDays();
     const frag = document.createDocumentFragment();
     const box = document.createElement('div'); box.className = V.anim;
     box.innerHTML = `<div class="dows">${DOW.map(d => `<div>${d}</div>`).join('')}</div><div class="mrows"></div>`;
@@ -418,24 +427,9 @@ body[data-ui="mobile"] #app{
           bg = evs.length ? evs[0].color : GREEN;
           if (evs.length) ring = `box-shadow:inset 0 0 0 2px ${GREEN};`;
         }
-        /* seri şeridi: aynı gid'in dünü/yarını varsa hücre arkası bantlansın */
-        let bandL = false, bandR = false, bandCol = '';
-        const wdi = (firstDow(V.y, V.m) + d - 1) % 7;
-        for (let j = 0; j < evs.length; j++) {
-          const g = evs[j].gid && gdays[evs[j].gid];
-          if (!g) continue;
-          if (wdi > 0 && g[S.shiftKey(k, -1)]) { bandL = true; bandCol = evs[j].color; }
-          if (wdi < 6 && g[S.shiftKey(k, 1)]) { bandR = true; bandCol = evs[j].color; }
-        }
-        let band = '';
-        if (bandCol) {
-          const bc = S.rgba(bandCol, .2);
-          const rl = bandL ? '0' : '999px', rr = bandR ? '0' : '999px';
-          band = `background:${bc};border-radius:${rl} ${rr} ${rr} ${rl};`;
-        }
         const dimc = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
         const dots = dotCols.map(c => `<div class="mdot" style="background:${c}"></div>`).join('');
-        return `<div class="mcell${dimc}" style="${band}">
+        return `<div class="mcell${dimc}">
           <div class="mnum" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>
           <div class="mdots">${dots}</div></div>`;
       }).join('');
@@ -749,6 +743,8 @@ body[data-ui="mobile"] #app{
         </div>
         <button class="save" id="sSave" style="background:${GREEN}">Kaydet ve eşitle</button>
         <div class="note">${esc(st.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
+        <div class="lab">Kategoriler</div>
+        <button class="ghost" id="sCats">Kategorileri düzenle</button>
         <div class="lab">Yedek</div>
         <button class="ghost" id="sIcs">Takvime aktar (.ics)</button>
         <button class="ghost" id="sExp">Yedeği indir</button>
@@ -759,6 +755,7 @@ body[data-ui="mobile"] #app{
         S.setCfg({ token: box.querySelector('#sTok').value.trim(), gist: box.querySelector('#sGist').value.trim() });
         S.sync().then(ok => { toast(ok ? 'Eşitlendi' : S.status.text); draw(); });
       };
+      box.querySelector('#sCats').onclick = () => { closeSheet(); openCats(); };
       box.querySelector('#sIcs').onclick = () => { S.downloadICS(null, 'ajanda'); toast('.ics indirildi'); };
       box.querySelector('#sExp').onclick = () => S.exportJSON();
       box.querySelector('#sImp').onchange = function () {
@@ -770,6 +767,40 @@ body[data-ui="mobile"] #app{
         };
         r.readAsText(f); this.value = '';
       };
+    };
+    draw(); sheet(box);
+  }
+
+  /* ---------------- kategori düzenleyici ---------------- */
+  function openCats() {
+    const box = document.createElement('div');
+    const draw = () => {
+      box.innerHTML = `<div class="grab"></div>
+        <div class="sh-h"><div class="sh-t">Kategoriler</div><button class="sh-x">Bitti</button></div>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          ${S.data.cats.map(c => `<div class="field" style="margin:0;padding:10px 14px" data-id="${c.id}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <input class="cName" value="${S.escAttr(c.name)}" style="flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:16px;font-weight:600;color:var(--ink)">
+              <button class="cDel" style="color:var(--rust);font-size:12.5px;font-weight:700">Sil</button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+              ${S.PALETTE.map(p => `<button class="cCol" data-h="${p.color}" style="width:26px;height:26px;border-radius:999px;background:${p.color};box-shadow:${c.color.toLowerCase() === p.color.toLowerCase() ? '0 0 0 2.5px ' + INK : 'inset 0 0 0 1px rgba(27,26,24,.1)'}"></button>`).join('')}
+            </div></div>`).join('')}
+        </div>
+        <button class="ghost" id="cAdd" style="margin-top:14px">+ Yeni kategori</button>
+        <div class="note">Sildiğin kategorinin kayıtları Genel'e taşınır. Değişiklikler bilgisayarla eşitlenir.</div>`;
+      box.querySelector('.sh-x').onclick = closeSheet;
+      box.querySelectorAll('[data-id]').forEach(row => {
+        const id = row.dataset.id;
+        row.querySelector('.cName').onchange = function () { S.updateCat(id, { name: this.value.trim() || 'Kategori' }); };
+        row.querySelector('.cDel').onclick = () => {
+          const n = S.eventsInCat(id, 'all').length;
+          if (!confirm('“' + S.cat(id).name + '” silinsin mi?' + (n ? '\n' + n + ' kayıt Genel\'e taşınacak.' : ''))) return;
+          S.deleteCat(id); draw(); render();
+        };
+        row.querySelectorAll('.cCol').forEach(b => b.onclick = () => { S.updateCat(id, { color: b.dataset.h }); draw(); render(); });
+      });
+      box.querySelector('#cAdd').onclick = () => { S.addCat('Yeni kategori', S.COLOR.gri); draw(); render(); };
     };
     draw(); sheet(box);
   }
