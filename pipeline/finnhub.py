@@ -42,6 +42,10 @@ class Finnhub:
         d = self._get("/company-news", symbol=sym, **{"from": fr.isoformat(), "to": to.isoformat()})
         return d if isinstance(d, list) else []
 
+    def news_range(self, sym, fr: str, to: str):
+        d = self._get("/company-news", symbol=sym, **{"from": fr, "to": to})
+        return d if isinstance(d, list) else []
+
     def insider(self, sym, days=180):
         to = dt.date.today()
         fr = to - dt.timedelta(days=days)

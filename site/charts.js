@@ -120,7 +120,8 @@ var Charts = (function () {
     });
     vals.forEach((v, i) => {
       const cx = pad.l + slot * i + slot / 2;
-      el('text', { x: cx, y: H - 8, 'text-anchor': 'middle', class: 'axis-text' }, svg).textContent = opts.labels[i];
+      const every = Math.ceil(46 / slot);  // dar ekranda etiketleri seyrelt
+      if (i % every === (n - 1) % every) el('text', { x: cx, y: H - 8, 'text-anchor': 'middle', class: 'axis-text' }, svg).textContent = opts.labels[i];
       if (v == null || !isFinite(v)) return;
       const top = Math.min(Y(v), Y(0)), h = Math.max(1, Math.abs(Y(v) - Y(0)));
       const r = Math.min(4, bw / 2, h);

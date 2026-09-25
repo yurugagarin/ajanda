@@ -1,82 +1,61 @@
-"""Haftalık özet: günlük toplanan verinin haftalık derlemesi + (Pazartesi) Claude okuması."""
+"""Haftalık özet.
+
+- rolling(): her gün Python ile son 7 günün derlemesi -> data/weekly/latest.json (Claude yok)
+- context(): Salı raporu için hisse başına veri paketi (claude_tasks.py kullanır)
+"""
 from __future__ import annotations
 
 import datetime as dt
 
 from common import DATA, now_iso, read_json, read_jsonl, today, write_json
-from llm import LLM
-
-SYSTEM_WEEKLY = """Sen uzun vadeli, haftalık DCA yapan bir yatırımcının haftalık okuma notunu yazıyorsun. Kullanıcı controller; muhasebe bilgisi ileri seviye.
-KURALLAR:
-- SADECE verilen JSON verisindeki olgu ve sayıları kullan. Yeni sayı, olay veya kaynak ekleme; web araması yok.
-- Al/sat komutu verme. Tez durumu, riskler ve önceden yazılmış kurallar açısından ne değişti, onu söyle.
-- Fiyat hareketi ile tez durumunu ayrı tut.
-- Kısa ve yoğun yaz (hisse başına en fazla 3 cümle + genel 2-3 cümle). Türkçe.
-Yanıtını SADECE şu JSON formatında ```json bloğu içinde ver:
-{"genel": "...", "hisseler": {"TICKER": "..."}, "bu_hafta_okunacaklar": ["..."]}"""
 
 
-def week_label(d: dt.date) -> tuple[str, dt.date, dt.date]:
-    y, w, _ = d.isocalendar()
-    start = d - dt.timedelta(days=d.weekday())
-    return f"{y}-W{w:02d}", start, start + dt.timedelta(days=6)
+def _window(days=7):
+    end = today()
+    return (end - dt.timedelta(days=days - 1)).isoformat(), end.isoformat()
 
 
-def build(llm: LLM, tickers: list[dict], summary: dict, force_llm: bool = False) -> dict:
-    ref = today() - dt.timedelta(days=1)  # Pazartesi 05:00 çalışması önceki haftayı kapatır
-    label, ws, we = week_label(ref)
-    kapanis = today().weekday() == 0  # Pazartesi: hafta kapanış raporu
-    path = DATA / "weekly" / f"{label}.json"
-    prev = read_json(path, {}) or {}
-    sigs = [s for s in read_jsonl(DATA / "signals.jsonl") if ws.isoformat() <= s["tarih"] <= (we + dt.timedelta(days=1)).isoformat()]
+def stock_snapshot(T: str, s: dict, summary: dict, days: int = 7) -> dict:
+    ws, we = _window(days)
+    h = summary.get("hisseler", {}).get(T, {})
+    ins = read_json(DATA / "insider" / f"{T}.json", {}) or {}
+    tx = [r for r in ins.get("son_islemler", []) if ws <= r["tarih"] <= we and not r["turev"]]
+    codes = {}
+    for r in tx:
+        codes[r["kod"]] = codes.get(r["kod"], 0) + 1
+    mv = read_json(DATA / "moves" / f"{T}.json", {}) or {}
+    fil = read_json(DATA / "filings" / f"{T}.json", {}) or {}
+    heads = (read_json(DATA / "headlines" / f"{T}.json", {}) or {}).get("basliklar", [])
+    fiyat = h.get("fiyat") or {}
+    return {
+        "ticker": T, "ad": s.get("name"), "donem": [ws, we],
+        "fiyat": {"son": fiyat.get("fiyat"), "tarih": fiyat.get("tarih"), "haftalik": fiyat.get("degisim_1h"),
+                  "aylik": fiyat.get("degisim_1a"), "zirveden": fiyat.get("zirveden_uzaklik"),
+                  "zirve_52h": fiyat.get("zirve_52h"), "zirve_tarih": fiyat.get("zirve_52h_tarih"), "kaynak": fiyat.get("kaynak")},
+        "benchmark_haftalik": {b: (summary.get("benchmarklar", {}).get(b) or {}).get("degisim_1h") for b in s.get("benchmarks", [])},
+        "tez": h.get("tez"), "kural": h.get("kural"),
+        "insider": {"hafta_islemleri": [{k: r.get(k) for k in ("tarih", "kisi", "unvan", "kod", "adet", "fiyat", "tutar",
+                                                              "plan_10b5_1", "sonrasi", "sahiplik", "url")} for r in tx],
+                    "hafta_kodlari": codes, "uyarilar": ins.get("uyarilar", []),
+                    "kumelenmis_satislar": ins.get("kumelenmis_satislar", []),
+                    "ozet_90g": (ins.get("pencereler") or {}).get("90", {}).get("kodlar")},
+        "buyuk_hareketler": [m for m in mv.get("hareketler", []) if ws <= m["tarih"] <= we],
+        "sec_bildirimleri": [f for f in fil.get("bildirimler", []) if ws <= f["tarih"] <= we and f["form"] not in ("4", "4/A")],
+        "basliklar": [{k: x.get(k) for k in ("tarih", "kaynak", "baslik", "url")} for x in heads if ws <= x["tarih"] <= we],
+        "bilanco": h.get("bilanco"),
+    }
+
+
+def rolling(stocks: list[dict], summary: dict) -> dict:
+    ws, we = _window(7)
+    sigs = [x for x in read_jsonl(DATA / "signals.jsonl") if ws <= x["tarih"] <= we]
     per = []
-    for t in tickers:
-        T = t["ticker"]
-        s = summary["hisseler"].get(T, {})
-        ins = read_json(DATA / "insider" / f"{T}.json", {}) or {}
-        week_tx = [r for r in ins.get("son_islemler", []) if ws.isoformat() <= r["tarih"] <= we.isoformat()]
-        codes = {}
-        for r in week_tx:
-            if r["turev"]:
-                continue
-            codes.setdefault(r["kod"], 0)
-            codes[r["kod"]] += 1
-        an = read_json(DATA / "analysis" / f"{T}.json", {}) or {}
-        new_filing = None
-        d = (an.get("son") or {}).get("dosya") or {}
-        if d.get("tarih") and ws.isoformat() <= d["tarih"] <= we.isoformat():
-            new_filing = d
-        radar = read_json(DATA / "radar" / f"{T}.json", {}) or {}
-        news = read_json(DATA / "news" / f"{T}.json", {}) or {}
-        per.append({
-            "ticker": T, "ad": t.get("name"),
-            "fiyat": s.get("fiyat"), "haftalik_degisim": s.get("fiyat", {}).get("degisim_1h") if s.get("fiyat") else None,
-            "benchmark_haftalik": {b: (summary["benchmarklar"].get(b) or {}).get("degisim_1h") for b in t.get("benchmarks", [])},
-            "tez": s.get("tez"), "kural": s.get("kural"),
-            "insider_hafta": {"kodlar": codes, "islem": len(week_tx)},
-            "insider_uyarilar": ins.get("uyarilar", []),
-            "yeni_bilanco": new_filing,
-            "gelismeler": news.get("gelismeler", [])[:3],
-            "radar": [x for x in radar.get("sinyaller", []) if x.get("guven") in ("orta", "yuksek")][:3],
-            "sinyaller": [x for x in sigs if x["ticker"] == T],
-        })
-    out = {"hafta": label, "baslangic": ws.isoformat(), "bitis": we.isoformat(), "guncelleme": now_iso(),
-           "durum": "kapanis" if kapanis else "devam_ediyor", "hisseler": per, "sinyaller": sigs,
-           "okuma": prev.get("okuma")}
-    need = llm.available and (kapanis or force_llm or not prev.get("okuma"))
-    if need:
-        import json
-        compact = [{k: v for k, v in h.items() if k not in ("insider_uyarilar",)} for h in per]
-        res = llm.call("haftalik_ozet", None, SYSTEM_WEEKLY,
-                       f"HAFTA {label} ({ws}–{we}) VERİSİ:\n```json\n{json.dumps(compact, ensure_ascii=False, default=str)[:120000]}\n```",
-                       max_tokens=4000, effort="medium")
-        if res["ok"]:
-            out["okuma"] = {**res["json"], "model": llm.model, "guncelleme": now_iso(),
-                            "not": "YORUM — yalnızca bu sayfadaki verilerden üretildi."}
-    write_json(path, out)
-    idx = read_json(DATA / "weekly" / "index.json", []) or []
-    if label not in idx:
-        idx.append(label)
-    idx = sorted(idx)[-104:]
-    write_json(DATA / "weekly" / "index.json", idx)
+    for s in stocks:
+        snap = stock_snapshot(s["ticker"], s, summary)
+        snap["basliklar"] = snap["basliklar"][:15]
+        snap["sinyaller"] = [x for x in sigs if x["ticker"] == s["ticker"]]
+        per.append(snap)
+    out = {"tur": "son7gun", "baslangic": ws, "bitis": we, "guncelleme": now_iso(), "hisseler": per, "sinyaller": sigs,
+           "not": "Günlük Python derlemesi (Claude yok). Derin analiz Salı raporundadır."}
+    write_json(DATA / "weekly" / "latest.json", out)
     return out

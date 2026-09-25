@@ -13,14 +13,13 @@ from pathlib import Path
 from common import CACHE, DATA, RateLimitedSession, log, read_json, write_json
 
 _UA = os.environ.get("SEC_USER_AGENT", "").strip()
+sess = RateLimitedSession(0.2, headers={"User-Agent": _UA or "unset", "Accept-Encoding": "gzip, deflate"}, name="SEC")
 if not _UA:
-    # Geçici beyan: repo sahibinin herkese açık GitHub noreply adresi. Kalıcı çözüm SEC_USER_AGENT secret'ı.
-    _owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "yurugagarin")
-    _UA = f"ajanda-hisse-pipeline {_owner}@users.noreply.github.com"
-    log.warning("SEC_USER_AGENT tanımlı değil; geçici User-Agent kullanılıyor (%s). "
-                "SEC kuralı gereği 'Ad Soyad email@adres' formatında secret ekleyin.", _UA)
-
-sess = RateLimitedSession(0.2, headers={"User-Agent": _UA, "Accept-Encoding": "gzip, deflate"}, name="SEC")
+    # SEC, gerçek iletişim bilgisi içermeyen User-Agent'ları 403 ile reddediyor (test edildi).
+    # Secret yoksa SEC'e hiç istek atma.
+    log.warning("SEC_USER_AGENT tanımlı değil: SEC EDGAR adımları (XBRL, 10-Q/10-K, Form 4) atlanacak. "
+                "'Ad Soyad email@adres' formatında secret ekleyin.")
+    sess.disabled = True
 
 
 def archive_url(cik: int, accn: str, doc: str = "") -> str:

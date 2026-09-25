@@ -11,7 +11,7 @@
   // Tema, ilk boyamadan önce uygulanır (yanıp sönme olmasın)
   try { var t = localStorage.getItem('hisse_tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
 </script>
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <header class="top">
@@ -27,10 +27,10 @@
 <main id="app" aria-live="polite"><div class="loading">Yükleniyor…</div></main>
 <footer class="foot">
   <p><strong>Yatırım tavsiyesi değildir, kişisel karar destek aracıdır.</strong></p>
-  <p class="muted">Veriler: SEC EDGAR (XBRL, 10-Q/10-K, Form 4), Finnhub, Yahoo Finance, Claude web search. Sayılar çekilen veriden gelir; veri yoksa "veri yok" yazar.</p>
+  <p class="muted">Veriler: SEC EDGAR (XBRL, 10-Q/10-K, Form 4), Finnhub, Nasdaq.com, Google News RSS, Claude (Salı raporu ve bilanço analizi). Sayılar çekilen veriden gelir; veri yoksa "veri yok" yazar.</p>
 </footer>
 <div id="tip" class="tip" role="tooltip" hidden></div>
-<script src="charts.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="charts.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

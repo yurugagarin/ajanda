@@ -17,7 +17,10 @@ def evaluate(ticker: str, rcfg: dict, pstats: dict, bench: dict[str, dict], thes
         out["durum"] = "veri_yok"
         return out
     tez = thesis_eval.get("genel", "veri_yok")
-    kosul_ok = tez != "kirmizi" if out["kosul"] == "tez_saglam" else True
+    if out["kosul"] == "tez_saglam":
+        kosul_ok = None if tez == "veri_yok" else tez != "kirmizi"  # None: tez verisi yok, koşul doğrulanamaz
+    else:
+        kosul_ok = True
     triggered = []
     for k in sorted(cfg.get("kademeler", []), key=lambda x: x["dusus"]):
         hit = dd <= -abs(k["dusus"])
@@ -52,9 +55,10 @@ def evaluate(ticker: str, rcfg: dict, pstats: dict, bench: dict[str, dict], thes
     out["tez_durumu"] = tez
     out["kosul_saglaniyor"] = kosul_ok
     if triggered:
-        out["durum"] = "tetiklendi_kosul_ok" if kosul_ok else "tetiklendi_kosul_yok"
+        out["durum"] = {True: "tetiklendi_kosul_ok", False: "tetiklendi_kosul_yok", None: "tetiklendi_kosul_bilinmiyor"}[kosul_ok]
         out["mesaj"] = (f"Zirveden %{dd} düşüş: -%{triggered[-1]['dusus']} kademesi tetiklendi. "
-                        + ("Tez sağlam koşulu sağlanıyor." if kosul_ok else "ANCAK tez durumu KIRMIZI — koşul sağlanmıyor.")
+                        + {True: "Tez sağlam koşulu sağlanıyor.", False: "ANCAK tez durumu KIRMIZI — koşul sağlanmıyor.",
+                           None: "Tez verisi yok — 'tez sağlam' koşulu doğrulanamıyor."}[kosul_ok]
                         + f" Önceden yazdığın not: {triggered[-1].get('not','')}")
     else:
         nxt = next((k for k in out["kademeler"] if not k["tetiklendi"]), None)

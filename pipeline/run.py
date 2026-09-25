@@ -1,20 +1,20 @@
-"""Pipeline orkestratörü.
+"""Günlük pipeline (yalnızca Python, Claude YOK).
 
-Kullanım:
-  python pipeline/run.py                  # günlük çalışma
-  python pipeline/run.py --force-filings  # bilanço analizini yeni dosya olmasa da yeniden çalıştır
-  python pipeline/run.py --force-radar --force-weekly
+  python pipeline/run.py                  # günlük veri toplama + değerlendirme
+  python pipeline/run.py --offline        # ağ yok: kayıtlı veriden tez/kural/özet yeniden hesapla
+  python pipeline/run.py --force-filings  # XBRL tablosunu yeni dosya olmasa da yeniden kur
   python pipeline/run.py --tickers NVDA,META
-  SKIP_LLM=1 python pipeline/run.py       # Claude adımları olmadan (maliyet sıfır)
 
-Günlük çalışmada: fiyat, haber, insider güncellenir. Bilanço (XBRL + Claude
-dipnot analizi + şeytanın avukatı) SADECE yeni 10-Q/10-K geldiğinde çalışır.
-Radar haftada bir (settings.yaml: radar_every_days).
+Günlük: fiyat (Nasdaq/Yahoo), haber başlıkları (Finnhub + Google News RSS), SEC Form 4,
+büyük hareket kaydı, tez/kural/sinyal değerlendirmesi. XBRL bilanço tablosu yalnızca
+yeni 10-Q/10-K geldiğinde yeniden kurulur. Claude gerektiren işler (yeni bilançonun
+dipnot analizi) data/pending_claude.json'a yazılır; claude_tasks.py bunları çalıştırır.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import os
 import sys
 import time
 import traceback
@@ -22,9 +22,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import filing_llm  # noqa: E402
 import insider as insider_mod  # noqa: E402
-import news_radar  # noqa: E402
+import moves as moves_mod  # noqa: E402
+import news  # noqa: E402
 import prices  # noqa: E402
 import quality  # noqa: E402
 import rules  # noqa: E402
@@ -35,7 +35,6 @@ import weekly  # noqa: E402
 import xbrl  # noqa: E402
 from common import DATA, load_yaml, log, now_iso, read_json, setup_logging, today, write_json  # noqa: E402
 from finnhub import Finnhub  # noqa: E402
-from llm import LLM  # noqa: E402
 
 
 class Run:
@@ -47,40 +46,58 @@ class Run:
 
     def step(self, name, ticker, fn, *a, **kw):
         t0 = time.time()
+        st = self.steps.setdefault(name, {"ok": 0, "hata": 0, "sure_sn": 0.0})
         try:
             r = fn(*a, **kw)
-            self.steps.setdefault(name, {"ok": 0, "hata": 0, "sure_sn": 0.0})["ok"] += 1
+            st["ok"] += 1
             return r
         except Exception as e:  # noqa: BLE001
             log.error("%s %s HATA: %s\n%s", name, ticker, e, traceback.format_exc())
             self.errors.append({"adim": name, "ticker": ticker, "hata": f"{type(e).__name__}: {e}"[:400]})
-            self.steps.setdefault(name, {"ok": 0, "hata": 0, "sure_sn": 0.0})["hata"] += 1
+            st["hata"] += 1
             return None
         finally:
-            self.steps.setdefault(name, {"ok": 0, "hata": 0, "sure_sn": 0.0})["sure_sn"] += round(time.time() - t0, 1)
+            st["sure_sn"] = round(st["sure_sn"] + time.time() - t0, 1)
+
+
+def load_config():
+    settings = load_yaml("settings.yaml")
+    stocks = load_yaml("stocks.yaml").get("stocks", [])
+    for s in stocks:
+        s["ticker"] = s["ticker"].upper()
+        s.setdefault("name", s["ticker"])
+        s.setdefault("benchmarks", settings.get("default_benchmarks", ["QQQ", "SMH"]))
+    return settings, stocks, load_yaml("theses.yaml"), load_yaml("rules.yaml")
 
 
 def filings_map(cik: int, recent: list[dict]) -> dict:
     out = {}
     for f in recent:
         if f.get("form") in ("10-Q", "10-K", "10-Q/A", "10-K/A", "8-K"):
-            out[f["accessionNumber"]] = {"form": f["form"], "filingDate": f["filingDate"],
-                                         "reportDate": f.get("reportDate"),
+            out[f["accessionNumber"]] = {"form": f["form"], "filingDate": f["filingDate"], "reportDate": f.get("reportDate"),
                                          "url": sec.archive_url(cik, f["accessionNumber"], f.get("primaryDocument", "")),
                                          "index_url": sec.filing_index_url(cik, f["accessionNumber"])}
     return out
 
 
+def save_filings(T: str, cik: int, recent: list[dict]) -> None:
+    """Son 120 günün SEC bildirimlerini (Form 4 hariç özet) sakla: Salı raporu ve hareket açıklayıcı için."""
+    cutoff = (today() - dt.timedelta(days=120)).isoformat()
+    rows = [{"form": f["form"], "tarih": f["filingDate"], "donem": f.get("reportDate"), "items": f.get("items") or "",
+             "aciklama": f.get("primaryDocDescription") or "", "accn": f["accessionNumber"],
+             "url": sec.archive_url(cik, f["accessionNumber"], f.get("primaryDocument", ""))}
+            for f in recent if f.get("filingDate", "") >= cutoff]
+    write_json(DATA / "filings" / f"{T}.json", {"ticker": T, "cik": cik, "guncelleme": now_iso(), "bildirimler": rows})
+
+
 def fundamentals(run: Run, T: str, cik: int, recent: list[dict]) -> tuple[dict, bool]:
-    """Yeni 10-Q/10-K varsa XBRL tablosunu ve kazanç kalitesini yeniden hesaplar."""
     path = DATA / "fundamentals" / f"{T}.json"
     old = read_json(path, {}) or {}
     periodic = sorted([f for f in recent if f.get("form") in ("10-Q", "10-K")], key=lambda f: f["filingDate"], reverse=True)
     latest = periodic[0] if periodic else None
-    latest_accn = latest["accessionNumber"] if latest else None
-    if old and old.get("son_dosya", {}).get("accn") == latest_accn and not run.args.force_filings \
-            and not old.get("xbrl_beklemede"):
-        log.info("%s: yeni 10-Q/10-K yok (%s) — bilanço analizi atlandı", T, latest_accn)
+    accn = latest["accessionNumber"] if latest else None
+    if old and old.get("son_dosya", {}).get("accn") == accn and not run.args.force_filings and not old.get("xbrl_beklemede"):
+        log.info("%s: yeni 10-Q/10-K yok (%s) — XBRL tablosu yeniden kurulmadı", T, accn)
         return old, False
     cf = sec.companyfacts(cik)
     if not cf:
@@ -89,167 +106,146 @@ def fundamentals(run: Run, T: str, cik: int, recent: list[dict]) -> tuple[dict, 
     fmap = filings_map(cik, recent)
     q = quality.analyze(table, fmap, cik, T)
     last_end = table["ceyrekler"][-1]["donem_sonu"] if table.get("ceyrekler") else None
-    beklemede = bool(latest and latest.get("reportDate") and last_end and
-                     last_end < (dt.date.fromisoformat(latest["reportDate"]) - dt.timedelta(days=5)).isoformat())
-    obj = {
-        "ticker": T, "cik": cik, "sirket": cf.get("entityName"), "guncelleme": now_iso(),
-        "son_dosya": {"accn": latest_accn, "form": latest["form"] if latest else None,
-                      "tarih": latest["filingDate"] if latest else None,
-                      "donem_sonu": latest.get("reportDate") if latest else None,
-                      "url": fmap.get(latest_accn, {}).get("url") if latest_accn else None},
-        "xbrl_beklemede": beklemede,
-        "tablo": table, "kalite": q,
-        "dosyalar": [{"form": f["form"], "tarih": f["filingDate"], "donem_sonu": f.get("reportDate"),
-                      "url": sec.archive_url(cik, f["accessionNumber"], f.get("primaryDocument", "")),
-                      "accn": f["accessionNumber"]} for f in periodic[:12]],
-        "kaynak": f"SEC XBRL companyfacts: https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json",
-    }
+    beklemede = bool(latest and latest.get("reportDate") and last_end
+                     and last_end < (dt.date.fromisoformat(latest["reportDate"]) - dt.timedelta(days=5)).isoformat())
+    obj = {"ticker": T, "cik": cik, "sirket": cf.get("entityName"), "guncelleme": now_iso(),
+           "son_dosya": {"accn": accn, "form": latest["form"] if latest else None, "tarih": latest["filingDate"] if latest else None,
+                         "donem_sonu": latest.get("reportDate") if latest else None,
+                         "url": fmap.get(accn, {}).get("url") if accn else None},
+           "xbrl_beklemede": beklemede, "tablo": table, "kalite": q,
+           "dosyalar": [{"form": f["form"], "tarih": f["filingDate"], "donem_sonu": f.get("reportDate"), "accn": f["accessionNumber"],
+                         "url": sec.archive_url(cik, f["accessionNumber"], f.get("primaryDocument", ""))} for f in periodic[:12]],
+           "kaynak": f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"}
     if beklemede:
-        log.warning("%s: %s dosyalandı ama XBRL companyfacts henüz güncellenmemiş; yarın tekrar denenecek", T, latest_accn)
+        log.warning("%s: %s dosyalandı ama XBRL henüz güncellenmemiş; yarın tekrar denenecek", T, accn)
     write_json(path, obj)
     return obj, True
+
+
+def latest_weekly_for(T: str) -> dict | None:
+    idx = read_json(DATA / "weekly" / "index.json", []) or []
+    for label in reversed(idx):
+        w = read_json(DATA / "weekly" / f"{label}.json", {}) or {}
+        if w.get("tur") != "sali_raporu" or not isinstance(w.get("hisseler"), dict):
+            continue
+        h = w["hisseler"].get(T) or {}
+        c = h.get("claude")
+        if c and not c.get("hata"):
+            return {**c, "rapor_tarihi": w.get("rapor_tarihi"), "hafta": label}
+    return None
 
 
 def main():
     setup_logging()
     ap = argparse.ArgumentParser()
+    ap.add_argument("--offline", action="store_true")
     ap.add_argument("--force-filings", action="store_true")
-    ap.add_argument("--force-radar", action="store_true")
-    ap.add_argument("--force-weekly", action="store_true")
-    ap.add_argument("--force-devil", action="store_true")
     ap.add_argument("--tickers", default="")
     args = ap.parse_args()
     run = Run(args)
     started = now_iso()
-
-    settings = load_yaml("settings.yaml")
-    stocks = load_yaml("stocks.yaml").get("stocks", [])
-    theses = load_yaml("theses.yaml")
-    rcfg = load_yaml("rules.yaml")
-    for s in stocks:
-        s["ticker"] = s["ticker"].upper()
-        s.setdefault("name", s["ticker"])
-        s.setdefault("benchmarks", settings.get("default_benchmarks", ["QQQ", "SMH"]))
+    settings, stocks, theses, rcfg = load_config()
     only = {t.strip().upper() for t in args.tickers.split(",") if t.strip()}
-    active = [s for s in stocks if not only or s["ticker"] in only]
-
-    llm = LLM(run.id)
+    active = {s["ticker"] for s in stocks if not only or s["ticker"] in only}
     fh = Finnhub()
-    lcfg = settings.get("llm", {})
-    ms = lcfg.get("max_searches", {})
+    if args.offline:
+        fh.available = False
+        sec.sess.disabled = True
 
-    # Konfigürasyonu siteye aktar
     write_json(DATA / "config.json", {"stocks": stocks, "theses": theses, "rules": rcfg,
-                                      "settings": {k: v for k, v in settings.items() if k != "llm"},
-                                      "model": llm.model, "guncelleme": now_iso()})
+                                      "settings": settings, "guncelleme": now_iso()})
 
-    # 1) Fiyatlar
     bench_syms = sorted({b for s in stocks for b in s["benchmarks"]} | {"QQQ"})
     pstats = {}
     for sym in [s["ticker"] for s in stocks] + bench_syms:
-        p = run.step("fiyat", sym, prices.update, sym, fh)
+        p = None
+        if not args.offline and (sym in active or sym in bench_syms):
+            p = run.step("fiyat", sym, prices.update, sym, fh)
         pstats[sym] = prices.stats(p or read_json(DATA / "prices" / f"{sym}.json", {}) or {})
 
     summary = {"guncelleme": now_iso(), "hisseler": {}, "benchmarklar": {b: pstats.get(b, {}) for b in bench_syms}}
     old_summary = read_json(DATA / "summary.json", {}) or {}
+    pending = []
 
     for s in stocks:
         T = s["ticker"]
-        if T not in {a["ticker"] for a in active}:
+        if T not in active:
             if T in old_summary.get("hisseler", {}):
                 summary["hisseler"][T] = old_summary["hisseler"][T]
             continue
         log.info("==== %s ====", T)
         th = theses.get(T)
-        cik = run.step("cik", T, sec.cik_for, T)
+        # --- SEC ---
+        cik = s.get("cik") or (None if args.offline or sec.sess.disabled else run.step("cik", T, sec.cik_for, T))
         recent = []
-        if cik:
-            sub = run.step("submissions", T, sec.submissions, cik)
+        if cik and not sec.sess.disabled:
+            sub = run.step("sec_submissions", T, sec.submissions, int(cik))
             recent = sec.recent_filings(sub) if sub else []
-        # 2) Bilanço (sadece yeni dosyada)
+            for f in recent:
+                f["_url"] = sec.archive_url(int(cik), f["accessionNumber"], f.get("primaryDocument", ""))
+            if recent:
+                save_filings(T, int(cik), recent)
         fund, is_new = (read_json(DATA / "fundamentals" / f"{T}.json", {}) or {}), False
         if cik and recent:
-            r = run.step("bilanco_xbrl", T, fundamentals, run, T, cik, recent)
+            r = run.step("bilanco_xbrl", T, fundamentals, run, T, int(cik), recent)
             if r:
                 fund, is_new = r
         table = fund.get("tablo", {}) or {}
-        # 3) Insider
-        icache = run.step("insider_form4", T, insider_mod.update_cache, T, cik, recent) if cik and recent else None
-        fh_ins = run.step("finnhub_insider", T, fh.insider, T) if fh.available else None
+        # --- Insider ---
         ins = None
-        if icache is not None:
-            ins = run.step("insider_analiz", T, insider_mod.analyze, T, icache, settings.get("insider", {}),
-                           pstats.get(T, {}), fh_ins)
-            if ins:
-                write_json(DATA / "insider" / f"{T}.json", ins)
+        if cik and recent:
+            icache = run.step("insider_form4", T, insider_mod.update_cache, T, int(cik), recent)
+            fh_ins = run.step("finnhub_insider", T, fh.insider, T) if fh.available else None
+            if icache is not None:
+                ins = run.step("insider_analiz", T, insider_mod.analyze, T, icache, settings.get("insider", {}),
+                               pstats.get(T, {}), fh_ins)
+                if ins:
+                    write_json(DATA / "insider" / f"{T}.json", ins)
         ins = ins or read_json(DATA / "insider" / f"{T}.json", {}) or {}
-        # 4) Haberler (günlük)
-        fh_news = (run.step("finnhub_haber", T, fh.news, T, settings.get("news", {}).get("lookback_days", 7)) or []) if fh.available else []
-        nw = run.step("haber", T, news_radar.news, llm, T, s["name"], fh_news, th, settings.get("news", {}), ms.get("news", 3))
-        if nw:
-            write_json(DATA / "news" / f"{T}.json", nw)
-        nw = nw or read_json(DATA / "news" / f"{T}.json", {}) or {}
-        # 5) Radar (haftalık)
-        rpath = DATA / "radar" / f"{T}.json"
-        rd = read_json(rpath, {}) or {}
-        age = None
-        if rd.get("guncelleme"):
-            age = (dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(rd["guncelleme"])).days
-        if llm.available and (args.force_radar or not rd or rd.get("hata") or age is None or age >= lcfg.get("radar_every_days", 7)):
-            new_rd = run.step("radar", T, news_radar.radar, llm, T, s["name"], th, ms.get("radar", 6))
-            if new_rd:
-                rd = new_rd
-                write_json(rpath, rd)
-        elif not rd:
-            rd = {"ticker": T, "sinyaller": [], "hata": "Claude devre dışı (ANTHROPIC_API_KEY yok) — radar çalışmadı.",
-                  "uyari": "Bu bölüm gürültülüdür.", "guncelleme": now_iso()}
-            write_json(rpath, rd)
-        # 6) Claude bilanço analizi + şeytanın avukatı (yeni dosyada)
-        apath = DATA / "analysis" / f"{T}.json"
-        an = read_json(apath, {}) or {}
-        latest_accn = (fund.get("son_dosya") or {}).get("accn")
-        need = latest_accn and ((an.get("son") or {}).get("dosya", {}).get("accn") != latest_accn
-                                or (an.get("son") or {}).get("hata") or args.force_filings)
-        if llm.available and cik and need and not fund.get("xbrl_beklemede"):
-            res = run.step("bilanco_claude", T, filing_llm.analyze_filing, llm, T, cik, recent, table, th)
-            if res:
-                if an.get("son") and not an["son"].get("hata") and an["son"]["dosya"]["accn"] != latest_accn:
-                    hist = an.get("gecmis", [])
-                    hist.insert(0, {"dosya": an["son"]["dosya"], "ozet": (an["son"].get("analiz") or {}).get("ozet"),
-                                    "seytanin_avukati": an.get("seytanin_avukati")})
-                    an["gecmis"] = hist[:8]
-                an["son"] = res
-                an["seytanin_avukati"] = None
-                write_json(apath, an)
-        # 7) Tez değerlendirmesi
-        te = run.step("tez", T, thesis_mod.evaluate, T, th, table, an.get("son"), nw, rd) or {}
-        if llm.available and th and (not an.get("seytanin_avukati") or (an.get("seytanin_avukati") or {}).get("hata")
-                                     or args.force_devil) and table.get("ceyrekler"):
-            da = run.step("seytanin_avukati", T, filing_llm.devils_advocate, llm, T, table, th, te,
-                          nw.get("gelismeler", []), ms.get("devils_advocate", 3))
-            if da:
-                da["ceyrek"] = (fund.get("son_dosya") or {})
-                an["seytanin_avukati"] = da
-                write_json(apath, an)
+        # --- Haber başlıkları ---
+        ncfg = settings.get("news", {})
+        heads = (read_json(DATA / "headlines" / f"{T}.json", {}) or {}).get("basliklar", [])
+        if not args.offline:
+            items = []
+            if fh.available:
+                items += news.finnhub_items(run.step("finnhub_haber", T, fh.news, T, 10) or [])
+            items += run.step("google_news", T, news.google_news, T, s["name"], 7) or []
+            heads = run.step("baslik_arsivi", T, news.update_archive, T, items, ncfg.get("archive_days", 45)) or heads
+        top = news.top_developments(T, s["name"], heads, ncfg.get("top_n", 3), ncfg.get("lookback_days", 7))
+        write_json(DATA / "news" / f"{T}.json", top)
+        # --- Büyük hareketler ---
+        mcfg = settings.get("moves", {})
+        mv = run.step("hareketler", T, moves_mod.update, T, s["benchmarks"], mcfg.get("threshold_pct", 5),
+                      recent, heads, fh if not args.offline else None, mcfg.get("lookback_days", 30)) \
+            or read_json(DATA / "moves" / f"{T}.json", {}) or {}
+        # --- Tez / kural / sinyal ---
+        an = read_json(DATA / "analysis" / f"{T}.json", {}) or {}
+        wk = latest_weekly_for(T)
+        te = run.step("tez", T, thesis_mod.evaluate, T, th, table, an.get("son"), wk) or {}
         write_json(DATA / "thesis" / f"{T}.json", te)
-        # 8) Kurallar
         bench = {b: pstats.get(b, {}) for b in s["benchmarks"]}
         re_ = run.step("kural", T, rules.evaluate, T, rcfg, pstats.get(T, {}), bench, te) or {}
         write_json(DATA / "rules" / f"{T}.json", re_)
-        # 9) Sinyaller
         run.step("sinyal", T, signals.detect, T, te, re_, ins, fund.get("kalite"),
-                 latest_accn if is_new or not read_json(DATA / "state.json", {}).get(T) else None,
+                 (fund.get("son_dosya") or {}).get("accn") if is_new or not (read_json(DATA / "state.json", {}) or {}).get(T) else None,
                  pstats.get(T, {}), pstats.get("QQQ", {}))
-        # Özet kartı
+        # Claude bekleyen iş: yeni bilanço analizi
+        latest_accn = (fund.get("son_dosya") or {}).get("accn")
+        if latest_accn and not fund.get("xbrl_beklemede") and \
+                ((an.get("son") or {}).get("dosya", {}).get("accn") != latest_accn or (an.get("son") or {}).get("hata")):
+            pending.append(T)
         kal = fund.get("kalite") or {}
+        week_moves = [m for m in mv.get("hareketler", []) if m["tarih"] >= (today() - dt.timedelta(days=7)).isoformat()]
         summary["hisseler"][T] = {
-            "ticker": T, "ad": s["name"], "benchmarks": s["benchmarks"],
-            "fiyat": pstats.get(T), "grafik": prices.spark(read_json(DATA / "prices" / f"{T}.json", {}) or {}, 365),
+            "ticker": T, "ad": s["name"], "benchmarks": s["benchmarks"], "fiyat": pstats.get(T),
+            "grafik": prices.spark(read_json(DATA / "prices" / f"{T}.json", {}) or {}, 365),
             "tez": {"genel": te.get("genel"), "onay": te.get("onay"),
                     "sutunlar": [{"id": p["id"], "ad": p["ad"], "durum": p["durum"], "deger": p.get("deger"),
                                   "birim": p.get("birim"), "tip": p.get("tip")} for p in te.get("sutunlar", [])],
                     "cikis_tetiklenen": [c["ad"] for c in te.get("cikis", []) if c["durum"] == "tetiklendi"]},
-            "gelismeler": nw.get("gelismeler", [])[:3], "haber_yontem": nw.get("yontem"),
+            "gelismeler": (wk or {}).get("gelismeler", [])[:3] if wk and (wk.get("rapor_tarihi") or "") >= (today() - dt.timedelta(days=7)).isoformat() else top["gelismeler"],
+            "haber_yontem": (f"Salı raporu ({wk['rapor_tarihi']}) — Claude seçimi" if wk and (wk.get("rapor_tarihi") or "") >= (today() - dt.timedelta(days=7)).isoformat() else top["yontem"]),
+            "buyuk_hareketler": [{"tarih": m["tarih"], "hareket": m["hareket"], "on_siniflama": m["on_siniflama"]} for m in week_moves],
             "kural": {k: re_.get(k) for k in ("durum", "mesaj", "tetiklenen", "zirveden_uzaklik", "dusus_kaynagi",
                                               "dusus_kaynagi_aciklama", "kosul_saglaniyor")},
             "insider_uyarilar": ins.get("uyarilar", []),
@@ -258,22 +254,27 @@ def main():
                         "dikkat": sum(1 for b in kal.get("bulgular", []) if b["etiket"] == "dikkat"),
                         "olumlu": sum(1 for b in kal.get("bulgular", []) if b["etiket"] == "olumlu"),
                         "son_dosya": fund.get("son_dosya"), "xbrl_beklemede": fund.get("xbrl_beklemede")},
+            "sali_raporu": {"hafta": (wk or {}).get("hafta"), "tarih": (wk or {}).get("rapor_tarihi"),
+                            "dca_notu": (wk or {}).get("dca_notu")},
         }
 
-    # 10) Karne, haftalık özet, özet
     run.step("karne", None, signals.scorecard, settings.get("signals", {}).get("horizons_days", [30, 90, 180]))
     write_json(DATA / "summary.json", summary)
-    run.step("haftalik", None, weekly.build, llm, stocks, summary, args.force_weekly)
+    run.step("haftalik_derleme", None, weekly.rolling, stocks, summary)
+    write_json(DATA / "pending_claude.json", {"guncelleme": now_iso(), "bilanco": pending})
+    if os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write(f"claude_filings={','.join(pending)}\n")
 
     runs = read_json(DATA / "runs.json", []) or []
-    rec = {"id": run.id, "baslangic": started, "bitis": now_iso(), "hisseler": [a["ticker"] for a in active],
-           "llm_aktif": llm.available, "model": llm.model, "finnhub_aktif": fh.available,
-           "sec_user_agent_tanimli": bool(__import__("os").environ.get("SEC_USER_AGENT")),
-           "sec_istek": sec.sess.count, "token": llm.totals, "adimlar": run.steps, "hatalar": run.errors,
-           "argumanlar": vars(args)}
-    runs.insert(0, rec)
-    write_json(DATA / "runs.json", runs[:120])
-    log.info("Bitti. Hatalar: %d, LLM: %s", len(run.errors), llm.totals)
+    runs.insert(0, {"id": run.id, "tur": "offline_yeniden_hesap" if args.offline else "gunluk_python",
+                    "baslangic": started, "bitis": now_iso(), "hisseler": sorted(active),
+                    "finnhub_aktif": fh.available, "sec_aktif": not sec.sess.disabled,
+                    "sec_user_agent_tanimli": bool(os.environ.get("SEC_USER_AGENT")), "sec_istek": sec.sess.count,
+                    "claude": None, "bekleyen_bilanco": pending, "adimlar": run.steps, "hatalar": run.errors,
+                    "argumanlar": vars(args)})
+    write_json(DATA / "runs.json", runs[:150])
+    log.info("Bitti. Hatalar: %d. Claude bekleyen bilanço: %s", len(run.errors), pending or "yok")
 
 
 if __name__ == "__main__":

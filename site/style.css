@@ -183,3 +183,5 @@ select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid 
   h1 { font-size: 1.25rem; }
   th, td { padding: 5px 6px; }
 }
+code { overflow-wrap: anywhere; word-break: break-word; }
+.olgu, .yorum, li, td { overflow-wrap: anywhere; }

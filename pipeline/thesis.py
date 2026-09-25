@@ -35,26 +35,36 @@ def _cond(val, op, esik):
     return val < esik if op == "<" else val > esik
 
 
-def evaluate(ticker: str, th: dict | None, table: dict, analysis: dict | None, news: dict | None,
-             radar: dict | None) -> dict:
+def evaluate(ticker: str, th: dict | None, table: dict, analysis: dict | None, weekly: dict | None) -> dict:
+    """analysis: son bilanço analizi (Claude); weekly: son Salı raporu (Claude) — yorum sütunları için
+    ikisinden daha yeni olanı kullanılır. Haber/radar bağlantıları Salı raporundan gelir."""
     if not th:
         return {"ticker": ticker, "tez_var": False, "genel": "veri_yok", "sutunlar": [], "cikis": [],
                 "guncelleme": now_iso()}
     rows = table.get("ceyrekler", []) if table else []
     last = rows[-1] if rows else {}
-    yorumlar = {y["id"]: y for y in ((analysis or {}).get("analiz") or {}).get("yorum_sutunlari", [])}
-    gel = (news or {}).get("gelismeler", [])
-    sig = (radar or {}).get("sinyaller", [])
+    yorumlar = {}
+    a_date = (analysis or {}).get("guncelleme") or ""
+    for y in ((analysis or {}).get("analiz") or {}).get("yorum_sutunlari", []):
+        yorumlar[y["id"]] = {**y, "_kaynak": {"tip": "bilanco", "tarih": a_date, **((analysis or {}).get("dosya") or {})}}
+    w_date = (weekly or {}).get("rapor_tarihi") or ""
+    if w_date and w_date >= a_date[:10]:
+        for y in ((weekly or {}).get("tez") or {}).get("yorum_sutunlari", []):
+            if y.get("durum") and y["durum"] != "veri_yok":
+                yorumlar[y["id"]] = {**y, "kanit_alinti": None, "_kaynak": {"tip": "sali_raporu", "tarih": w_date,
+                                                                            "url": y.get("kaynak_url")}}
+    gel = (weekly or {}).get("gelismeler", [])
+    sig = (weekly or {}).get("radar", [])
     out_p = []
     for p in th.get("sutunlar", []):
         base = {"id": p["id"], "ad": p["ad"], "tip": p.get("tip", "metrik"), "aciklama": p.get("aciklama", "")}
         if p.get("tip") == "yorum":
             y = yorumlar.get(p["id"])
             base.update({"durum": y["durum"] if y else "veri_yok", "soru": p.get("soru", "").strip(),
-                         "gerekce": y.get("gerekce") if y else "Henüz değerlendirilmedi (Claude bilanço analizi çalışmadı).",
+                         "gerekce": y.get("gerekce") if y else "Henüz değerlendirilmedi (Claude bilanço analizi / Salı raporu çalışmadı).",
                          "kanit_alinti": y.get("kanit_alinti") if y else None,
                          "kanit_dogrulandi": y.get("kanit_alinti_dogrulandi") if y else None,
-                         "kaynak": (analysis or {}).get("dosya"), "olgu_mu": False})
+                         "kaynak": y.get("_kaynak") if y else None, "olgu_mu": False})
         else:
             m = p["metrik"]
             val, lbl, stale = None, None, False

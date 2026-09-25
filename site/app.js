@@ -5,7 +5,7 @@
    Kişisel notlar ve tercihler: localStorage
    ============================================================ */
 (function () {
-  const DATA = '../data/';
+  const DATA = window.HISSE_DATA || 'data/';
   const $app = document.getElementById('app');
   const cache = {};
 
@@ -127,8 +127,9 @@
     const f = h.fiyat || {}, tz = h.tez || {}, k = h.kural || {};
     const alerts = [];
     if (tz.cikis_tetiklenen && tz.cikis_tetiklenen.length) alerts.push(`<div class="alert kirmizi">⚑ Çıkış kriteri tetiklendi: ${tz.cikis_tetiklenen.map(esc).join('; ')}</div>`);
-    if (k.durum && k.durum.startsWith('tetiklendi')) alerts.push(`<div class="alert ${k.kosul_saglaniyor ? 'sari' : 'kirmizi'}">◆ Kural: ${esc(k.mesaj)}</div>`);
+    if (k.durum && k.durum.startsWith('tetiklendi')) alerts.push(`<div class="alert ${k.kosul_saglaniyor === false ? 'kirmizi' : 'sari'}">◆ Kural: ${esc(k.mesaj)}</div>`);
     (h.insider_uyarilar || []).filter(u => u.etiket === 'dikkat').forEach(u => alerts.push(`<div class="alert sari">👤 ${esc(u.metin)}</div>`));
+    (h.buyuk_hareketler || []).forEach(m => alerts.push(`<div class="alert sari">⚡ Büyük hareket ${date(m.tarih)}: ${pct(m.hareket, 2, true)} (${esc(({ sirkete_ozel: 'şirkete özel', sektor: 'sektör', piyasa: 'piyasa', karma: 'karma' })[m.on_siniflama] || m.on_siniflama)})</div>`));
     if (h.bilanco && h.bilanco.kirmizi) alerts.push(`<div class="alert kirmizi">⚑ Son bilançoda ${h.bilanco.kirmizi} kırmızı bayrak</div>`);
     const gel = (h.gelismeler || []).slice(0, 3).map(g => `<li>${g.tarih ? `<span class="muted small">${date(g.tarih)}</span> ` : ''}${link(g.kaynak_url, g.baslik)}${g.etki ? ` <span class="muted small">(${esc({ destekler: 'teze destek', zayiflatir: 'tezi zayıflatır', notr: 'nötr' }[g.etki] || g.etki)})</span>` : ''}</li>`).join('');
     return `<a class="card-link" href="#/h/${esc(h.ticker)}"><div class="card tcard">
@@ -150,11 +151,12 @@
       <div class="sub-label">Son 7 günün en önemli gelişmeleri</div>
       ${gel ? `<ol class="news small">${gel}</ol>` : '<p class="empty small">veri yok</p>'}
       ${h.haber_yontem ? `<p class="muted small" style="margin:0">${esc(h.haber_yontem)}</p>` : ''}
+      ${h.sali_raporu && h.sali_raporu.dca_notu && h.sali_raporu.dca_notu.not ? `<div class="sub-label">Salı raporu · DCA notu</div>${yorum(esc(h.sali_raporu.dca_notu.not))}` : ''}
     </div></a>`;
   }
 
   /* ================= HİSSE DETAY ================= */
-  const TABS = [['tez', 'Tez'], ['bilanco', 'Bilanço & kalite'], ['insider', 'Insider'], ['haber', 'Haberler'], ['radar', 'Öncü radar'], ['kural', 'Kurallar'], ['notlar', 'Notlarım']];
+  const TABS = [['sali', 'Salı raporu'], ['tez', 'Tez'], ['bilanco', 'Bilanço & kalite'], ['insider', 'Insider'], ['hareket', 'Büyük hareketler'], ['haber', 'Haberler'], ['kural', 'Kurallar'], ['notlar', 'Notlarım']];
   async function viewStock(T, tab) {
     T = (T || '').toUpperCase();
     const sum = await J('summary.json');
@@ -178,7 +180,7 @@
     $app.innerHTML = head;
     const $t = document.getElementById('tab');
     $t.innerHTML = '<div class="loading">Yükleniyor…</div>';
-    const fn = { tez: tabTez, bilanco: tabBilanco, insider: tabInsider, haber: tabHaber, radar: tabRadar, kural: tabKural, notlar: tabNotlar }[tab] || tabTez;
+    const fn = { sali: tabSali, tez: tabTez, bilanco: tabBilanco, insider: tabInsider, hareket: tabHareket, haber: tabHaber, kural: tabKural, notlar: tabNotlar }[tab] || tabTez;
     await fn(T, $t, h);
   }
 
@@ -224,23 +226,15 @@
   const effectIcon = e => e === 'destekler' ? '<span title="teze destek" style="color:var(--good)">▲</span>' : e === 'zayiflatir' ? '<span title="tezi zayıflatır" style="color:var(--bad)">▼</span>' : '<span class="muted">•</span>';
 
   function devilHtml(an) {
-    const d = an && an.seytanin_avukati;
-    let html = `<div class="section card"><h2>😈 Şeytanın avukatı</h2><p class="muted small">"Bu hisseyi şimdi satmak için en güçlü argüman nedir?" — her yeni 10-Q/10-K'da yeniden yazılır. Tezine karşı en güçlü argüman; bilinçli olarak tek taraflıdır.</p>`;
-    if (!d) return html + '<p class="empty">Henüz üretilmedi (Claude API anahtarı gerekli).</p></div>';
-    if (d.hata) return html + `<div class="alert kirmizi">Üretilemedi: ${esc(d.hata)}</div></div>`;
-    html += `<p class="muted small">Çeyrek: ${esc((d.ceyrek || {}).form || '')} ${esc((d.ceyrek || {}).donem_sonu || '')} · ${dt(d.guncelleme)} · ${esc(d.model || '')}</p>`;
+    const son = (an && an.son) || {};
+    const d = son.analiz && son.analiz.seytanin_avukati;
+    let html = `<div class="section card"><h2>😈 Şeytanın avukatı — çeyreklik</h2><p class="muted small">"Bu hisseyi şimdi satmak için en güçlü argüman nedir?" Her yeni 10-Q/10-K'da Claude tarafından yeniden yazılır; bilinçli olarak tek taraflıdır. Haftalık sürümü Salı raporundadır.</p>`;
+    if (!d) return html + `<p class="empty">${son.hata ? 'Üretilemedi: ' + esc(son.hata) : 'Henüz üretilmedi (yeni bilanço + CLAUDE_CODE_OAUTH_TOKEN gerekli).'}</p></div>`;
+    html += `<p class="muted small">${esc((son.dosya || {}).form || '')} ${esc((son.dosya || {}).donem_sonu || '')} · ${dt(son.guncelleme)} · ${esc(son.model || '')}</p>`;
     html += yorum(esc(d.en_guclu_arguman || '').replace(/\n+/g, '<br><br>'));
-    if ((d.destekleyen_olgular || []).length) {
-      html += '<div class="sub-label">Dayandığı olgular</div><ul class="plain small">';
-      d.destekleyen_olgular.forEach(o => {
-        const k = o.kaynak || '';
-        html += `<li>${esc(o.olgu)} — ${safeUrl(k) ? link(k, 'kaynak') : `<span class="muted">${esc(k)}</span>`} ${o.kaynak_dogrulandi === false ? '<span class="verif no">✕ kaynak doğrulanamadı</span>' : ''}</li>`;
-      });
-      html += '</ul>';
-    }
+    if ((d.destekleyen_olgular || []).length) html += '<div class="sub-label">Dayandığı olgular</div><ul class="plain small">' + d.destekleyen_olgular.map(o => `<li>${esc(o.olgu)} — <span class="muted">${safeUrl(o.kaynak) ? link(o.kaynak, 'kaynak') : esc(o.kaynak)}</span></li>`).join('') + '</ul>';
     if (d.tezin_zayif_halkasi) html += `<div class="sub-label">Tezin zayıf halkası</div>${yorum(esc(d.tezin_zayif_halkasi))}`;
     if ((d.argumani_curutecek_gostergeler || []).length) html += `<div class="sub-label">Bu argümanı çürütecek göstergeler</div><ul class="small">${d.argumani_curutecek_gostergeler.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
-    if ((d.izlenecekler || []).length) html += `<div class="sub-label">İzlenecekler</div><ul class="small">${d.izlenecekler.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
     if ((an.gecmis || []).length) {
       html += '<details><summary>Önceki çeyrekler</summary>';
       an.gecmis.forEach(g => { if (g.seytanin_avukati && g.seytanin_avukati.en_guclu_arguman) html += `<div class="sub-label">${esc(g.dosya.form)} ${esc(g.dosya.donem_sonu)}</div>${yorum(esc(g.seytanin_avukati.en_guclu_arguman))}`; });
@@ -330,7 +324,7 @@
   function claudeFiling(an) {
     let html = `<div class="section card"><h2>Dipnot ve basın bülteni analizi <span class="badge">Claude</span></h2>`;
     const s = an && an.son;
-    if (!s) return html + '<p class="empty">Henüz çalışmadı. ANTHROPIC_API_KEY eklendiğinde bir sonraki çalışmada son 10-Q/10-K analiz edilir.</p></div>';
+    if (!s) return html + '<p class="empty">Henüz çalışmadı. Yeni 10-Q/10-K geldiğinde (veya Actions → Run workflow → bilanco_claude) Claude ile analiz edilir; CLAUDE_CODE_OAUTH_TOKEN gerekir.</p></div>';
     if (s.hata && !s.analiz) return html + `<div class="alert kirmizi">Analiz başarısız: ${esc(s.hata)}</div></div>`;
     const a = s.analiz || {}, d = s.dosya || {};
     html += `<p class="muted small">${link(d.url, `${d.form} · dönem ${d.donem_sonu} · dosyalama ${d.tarih}`)} ${(s.basin_bulteni || []).map(b => ' · ' + link(b.url, 'basın bülteni ' + b.ad)).join('')} · ${esc(s.model)} · ${dt(s.guncelleme)}${d.kesildi ? ' · <b>belge uzunluk sınırında kesildi</b>' : ''}</p>
@@ -395,43 +389,86 @@
 
   /* ---- Haberler ---- */
   async function tabHaber(T, $t) {
-    const n = await J(`news/${T}.json`);
-    if (!n) { $t.innerHTML = '<div class="card"><p class="empty">veri yok</p></div>'; return; }
-    let html = `<div class="card"><h2>Son 7 günün en önemli gelişmeleri</h2><p class="muted small">${esc(n.yontem || '')} · ${dt(n.guncelleme)}${n.elenen_dogrulanamayan ? ` · kaynağı doğrulanamayan ${n.elenen_dogrulanamayan} madde elendi` : ''}</p><ul class="plain">`;
-    (n.gelismeler || []).forEach(g => {
-      html += `<li><div class="row">${effectIcon(g.etki)} <b>${esc(g.baslik)}</b> <span class="muted small">${date(g.tarih)} · ${link(g.kaynak_url, g.kaynak_adi || 'kaynak')}${g.sutun_id ? ` · sütun: ${esc(g.sutun_id)}` : ''}${g.onem ? ` · önem ${esc(g.onem)}/5` : ''}</span></div>${olgu(esc(g.olgu))}${g.yorum ? yorum(esc(g.yorum)) : ''}</li>`;
-    });
-    if (!(n.gelismeler || []).length) html += '<li class="empty">veri yok</li>';
-    html += `</ul></div><div class="section card"><h2>Ham haber akışı (Finnhub)</h2><ul class="plain small">${(n.ham_haberler || []).map(x => `<li><span class="muted">${date(x.tarih)} · ${esc(x.kaynak_adi)}</span> — ${link(x.kaynak_url, x.baslik)}</li>`).join('') || '<li class="empty">veri yok (FINNHUB_API_KEY gerekli)</li>'}</ul></div>`;
+    const [n, a] = await Promise.all([J(`news/${T}.json`), J(`headlines/${T}.json`)]);
+    let html = `<div class="card"><h2>Son 7 günün öne çıkanları</h2><p class="muted small">${esc((n || {}).yontem || '')}</p><ul class="plain">`;
+    ((n || {}).gelismeler || []).forEach(g => { html += `<li>${link(g.kaynak_url, g.baslik)} <span class="muted small">${date(g.tarih)} · ${esc(g.kaynak_adi || '')}</span>${g.olgu ? olgu(esc(g.olgu)) : ''}</li>`; });
+    if (!((n || {}).gelismeler || []).length) html += '<li class="empty">veri yok</li>';
+    const arr = (a || {}).basliklar || [];
+    html += `</ul></div><div class="section card"><h2>Başlık arşivi (${arr.length})</h2><p class="muted small">Finnhub + Google News RSS, günlük Python ile toplanır (Claude yok). Son 45 gün.</p><ul class="plain small">${arr.slice(0, 150).map(x => `<li><span class="muted">${date(x.tarih)} · ${esc(x.kaynak)} · ${esc(x.saglayici)}</span><br>${link(x.url, x.baslik)}</li>`).join('') || '<li class="empty">veri yok</li>'}</ul></div>`;
     $t.innerHTML = html;
   }
 
-  /* ---- Radar ---- */
-  const KAT = { marka_patent: 'Marka / patent', uygulama_magazasi: 'Uygulama mağazası', ise_alim: 'İşe alım', konferans: 'Konferans / etkinlik', earnings_call_dili: 'Earnings call dili', sektor_tedarik: 'Sektör / tedarik zinciri' };
-  async function tabRadar(T, $t) {
-    const r = await J(`radar/${T}.json`);
-    let html = `<div class="warnbox"><b>⚠ Bu bölüm gürültülüdür.</b> Öncü sinyaller çoğu zaman yanlış alarm verir; tek başına karar dayanağı değildir. Kaynağı doğrulanamayan sinyaller otomatik elenir.</div>`;
-    if (!r) { $t.innerHTML = html + '<p class="empty">veri yok</p>'; return; }
-    html += `<p class="muted small section">Güncelleme: ${dt(r.guncelleme)} (haftalık) ${r.model ? '· ' + esc(r.model) : ''}${r.elenen_dogrulanamayan ? ` · ${r.elenen_dogrulanamayan} doğrulanamayan sinyal elendi` : ''}</p>`;
-    if (r.hata) html += `<div class="alert kirmizi">${esc(r.hata)}</div>`;
-    const G = { yuksek: 'yesil', orta: 'sari', dusuk: 'veri_yok' };
-    html += '<div class="stack">' + (r.sinyaller || []).map(s => `<div class="card"><div class="row between"><span class="badge">${esc(KAT[s.kategori] || s.kategori)}</span>${st(G[s.guven], 'Güven: ' + ({ yuksek: 'yüksek', orta: 'orta', dusuk: 'düşük' }[s.guven] || s.guven))}</div>
-      ${olgu(esc(s.sinyal) + ` <span class="small muted">${s.tarih ? date(s.tarih) + ' · ' : ''}${link(s.kaynak_url, 'kaynak')}</span>`)}${yorum(esc(s.yorum) + (s.yon ? ` <span class="small muted">(${esc(s.yon)})</span>` : ''))}${s.sutun_id ? `<div class="small muted">İlgili sütun: ${esc(s.sutun_id)}</div>` : ''}</div>`).join('') + '</div>';
-    if (!(r.sinyaller || []).length && !r.hata) html += '<p class="empty">Sinyal yok.</p>';
+  /* ---- Büyük hareketler ---- */
+  const SINIF = { sirkete_ozel: 'Şirkete özel', sektor: 'Sektör', piyasa: 'Piyasa', karma: 'Karma', belirsiz: 'Belirsiz' };
+  const KALICI = { kalici: 'Kalıcı', gurultu: 'Gürültü', belirsiz: 'Belirsiz' };
+  async function tabHareket(T, $t) {
+    const m = await J(`moves/${T}.json`);
+    if (!m) { $t.innerHTML = '<div class="card"><p class="empty">veri yok</p></div>'; return; }
+    let html = `<div class="card"><h2>Günlük ±%${esc(m.esik_yuzde)} üzeri hareketler</h2><p class="muted small">${esc(m.not)}</p></div>`;
+    (m.hareketler || []).forEach(e => {
+      const c = e.claude;
+      html += `<div class="section card"><div class="row between"><h3 style="margin:0">${date(e.tarih)} · <span class="chg ${e.hareket >= 0 ? 'up' : 'down'}">${pct(e.hareket, 2, true)}</span></h3>
+        <span class="badge" title="Python ön sınıflaması">${esc(SINIF[e.on_siniflama] || e.on_siniflama)}</span></div>
+        ${olgu(`Aynı gün: ${Object.entries(e.benchmark || {}).map(([b, v]) => `${esc(b)} ${pct(v, 2, true)}`).join(' · ')}<div class="small muted">${esc(e.on_siniflama_aciklama || '')}</div>`)}
+        ${c ? `<div class="sub-label">Claude açıklaması (${esc(c.rapor || '')})</div>${yorum(`<b>Neden:</b> ${esc(c.neden)}<br><b>Sınıflama:</b> ${esc(SINIF[c.siniflama] || c.siniflama)} · <b>Kalıcılık:</b> ${esc(KALICI[c.kalicilik] || c.kalicilik)}<br><b>Teze etkisi:</b> ${esc(c.teze_etki)}`)}<div class="small">${(c.kaynak_urls || []).map((u, i) => link(u, 'kaynak ' + (i + 1))).join(' · ')}</div>` : '<p class="muted small">Claude açıklaması Salı raporunda eklenecek.</p>'}
+        ${(e.sec_bildirimleri || []).length ? `<div class="sub-label">SEC bildirimleri (${esc(e.onceki_gun)} – ${esc(e.tarih)})</div><ul class="small">${e.sec_bildirimleri.map(f => `<li>${link(f.url, f.form)} · ${esc(f.tarih)} ${f.items ? '· madde ' + esc(f.items) : ''} ${esc(f.aciklama || '')}</li>`).join('')}</ul>` : ''}
+        <details><summary>O gün ve önceki günün başlıkları (${(e.basliklar || []).length})</summary><ul class="small">${(e.basliklar || []).map(h => `<li>${esc(h.tarih)} · ${esc(h.kaynak)} — ${link(h.url, h.baslik)}</li>`).join('') || '<li class="empty">başlık yok</li>'}</ul></details></div>`;
+    });
+    if (!(m.hareketler || []).length) html += '<p class="empty section">Son dönemde eşik üzeri hareket yok.</p>';
     $t.innerHTML = html;
+  }
+
+  /* ---- Salı raporu (hisse bazında) ---- */
+  async function latestSali() {
+    const idx = await J('weekly/index.json');
+    for (const k of (idx || []).slice().reverse()) { const w = await J(`weekly/${k}.json`); if (w && w.tur === 'sali_raporu') return w; }
+    return null;
+  }
+  async function tabSali(T, $t) {
+    const w = await latestSali();
+    const h = w && w.hisseler && w.hisseler[T];
+    if (!h) { $t.innerHTML = '<div class="card"><p class="empty">Henüz Salı raporu yok. Her Salı 23:00 (Berlin) Claude ile üretilir.</p></div>'; return; }
+    $t.innerHTML = `<p class="muted small">Rapor: ${esc(w.hafta)} · ${date(w.rapor_tarihi)} · ${esc(w.model || '')} · <a href="#/haftalik/${esc(w.hafta)}">tüm hisseler</a></p>` + saliStockHtml(T, h);
+  }
+  const KATG = { sirket: 'Şirket', urun_sozlesme: 'Ürün/sözleşme', rakip: 'Rakip', musteri: 'Müşteri', tedarikci: 'Tedarikçi', sektor: 'Sektör', duzenleme: 'Düzenleme', diger: 'Diğer' };
+  const KAT = { marka_patent: 'Marka / patent', uygulama_magazasi: 'Uygulama mağazası', ise_alim: 'İş ilanları', konferans: 'Konferans / etkinlik', earnings_call_dili: 'Earnings call dili', sektor_tedarik: 'Sektör / tedarik zinciri' };
+  const OLAY = { yonetim_degisikligi: 'Yönetim değişikliği', yonetici_aciklamasi: 'Yönetici açıklaması', tartismali_davranis: 'Tartışmalı davranış', dava: 'Dava', sec_inceleme: 'SEC incelemesi', diger: 'Diğer' };
+  function dayanak(list) {
+    return (list || []).length ? `<ul class="plain small">${list.map(d => `<li>${esc(d.olgu)} — ${safeUrl(d.kaynak) ? link(d.kaynak, 'kaynak') : `<span class="muted">${esc(d.kaynak)}</span>`} ${d.kaynak_dogrulandi === false ? '<span class="verif no">✕ kaynak doğrulanamadı</span>' : ''}</li>`).join('')}</ul>` : '';
+  }
+  function saliStockHtml(T, h) {
+    const c = h.claude || {};
+    if (c.hata) return `<div class="alert kirmizi">${esc(T)}: Salı raporu üretilemedi — ${esc(c.hata)}</div>`;
+    const v = h.veri || {}, tz = v.tez || {};
+    let html = `<div class="card">${yorum(esc(c.ozet))}</div>`;
+    // 7) DCA notu en üstte: Çarşamba sabahı ilk bakılacak yer
+    const d = c.dca_notu || {};
+    html += `<div class="section card"><h3>7 · Çarşamba DCA notu</h3>${olgu(esc(d.kural_durumu || ''))}${(d.riskler || []).length ? `<ul class="small">${d.riskler.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${d.not ? yorum(esc(d.not)) : ''}<p class="muted small">Bilgi amaçlıdır; al/sat talimatı değildir.</p></div>`;
+    html += `<div class="section card"><h3>1 · Haftanın gelişmeleri</h3><ul class="plain">${(c.gelismeler || []).map(g => `<li><div class="row">${effectIcon(g.etki)} <span class="badge">${esc(KATG[g.kategori] || g.kategori)}</span> <b>${esc(g.baslik)}</b> <span class="muted small">${date(g.tarih)} · ${link(g.kaynak_url, g.kaynak_adi || 'kaynak')}${g.onem ? ` · önem ${esc(g.onem)}/5` : ''}${g.sutun_id ? ` · sütun: ${esc(g.sutun_id)}` : ''}</span></div>${olgu(esc(g.olgu))}${yorum(esc(g.yorum))}</li>`).join('') || '<li class="empty">yok</li>'}</ul>${c.elenen_dogrulanamayan ? `<p class="muted small">Kaynağı doğrulanamayan ${c.elenen_dogrulanamayan} madde elendi.</p>` : ''}</div>`;
+    const y = c.yonetim || {};
+    html += `<div class="section card"><h3>2 · Yönetim ve içeriden bilgiler</h3><div class="sub-label">Insider (Form 4)</div>${olgu('Bu hafta kod dağılımı: ' + (Object.entries(h.insider_hafta || {}).map(([k, n]) => `${esc(k)}: ${n}`).join(' · ') || 'işlem yok') + ` · <a href="#/h/${esc(T)}/insider">detay</a>`)}${yorum(esc(y.insider_degerlendirmesi))}
+      <div class="sub-label">Olaylar</div><ul class="plain">${(y.olaylar || []).map(o => `<li><span class="badge">${esc(OLAY[o.tur] || o.tur)}</span> <span class="muted small">${date(o.tarih)} · ${link(o.kaynak_url, 'kaynak')}</span>${olgu(esc(o.olgu))}${yorum(esc(o.yorum))}</li>`).join('') || '<li class="empty">Kaynaklı olay yok.</li>'}</ul></div>`;
+    html += `<div class="section card"><h3>3 · Büyük fiyat hareketleri</h3>${(c.hareketler || []).map(m => { const raw = (h.buyuk_hareketler || []).find(x => x.tarih === m.tarih) || {}; return `<div class="pillar"><b>${date(m.tarih)}</b> ${raw.hareket != null ? `<span class="chg ${raw.hareket >= 0 ? 'up' : 'down'}">${pct(raw.hareket, 2, true)}</span>` : ''} <span class="badge">${esc(SINIF[m.siniflama] || m.siniflama)}</span> <span class="badge">${esc(KALICI[m.kalicilik] || m.kalicilik)}</span>${raw.benchmark ? olgu(Object.entries(raw.benchmark).map(([b, v]) => `${esc(b)} ${pct(v, 2, true)}`).join(' · ')) : ''}${yorum(`<b>Neden:</b> ${esc(m.neden)}<br><b>Teze etkisi:</b> ${esc(m.teze_etki)}`)}<div class="small">${(m.kaynak_urls || []).map((u, i) => link(u, 'kaynak ' + (i + 1))).join(' · ')}</div></div>`; }).join('') || '<p class="empty">Bu hafta ±eşik üzeri hareket yok.</p>'}</div>`;
+    const t = c.tez || {};
+    html += `<div class="section card"><h3>4 · Tez durumu</h3><div class="row">${st(tz.genel, GENEL[tz.genel])}</div><div class="pills" style="margin:8px 0">${(tz.sutunlar || []).map(p => `<span class="pill"><span class="dot ${esc(p.durum)}"></span>${esc(p.ad)}</span>`).join('')}</div>${yorum(esc(t.degerlendirme))}${(t.sutun_notlari || []).length ? `<ul class="small">${t.sutun_notlari.map(n => `<li><b>${esc(n.id)}</b>: ${esc(n.not)}</li>`).join('')}</ul>` : ''}</div>`;
+    html += `<div class="section card"><h3>5 · Neden hâlâ tutmalıyım?</h3>${yorum(esc((c.neden_tutmali || {}).arguman).replace(/\n+/g, '<br><br>'))}${dayanak((c.neden_tutmali || {}).dayanaklar)}</div>`;
+    html += `<div class="section card"><h3>6 · Neden satmalıyım? (şeytanın avukatı)</h3>${yorum(esc((c.neden_satmali || {}).arguman).replace(/\n+/g, '<br><br>'))}${dayanak((c.neden_satmali || {}).dayanaklar)}${(c.neden_satmali || {}).zayif_halka ? `<div class="sub-label">Zayıf halka</div>${yorum(esc(c.neden_satmali.zayif_halka))}` : ''}</div>`;
+    const G = { yuksek: 'yesil', orta: 'sari', dusuk: 'veri_yok' };
+    html += `<div class="section card"><h3>Öncü sinyal radarı</h3><div class="warnbox small"><b>⚠ Bu bölüm gürültülüdür.</b> Öncü sinyaller çoğu zaman yanlış alarm verir; tek başına karar dayanağı değildir.</div><ul class="plain">${(c.radar || []).map(r => `<li><div class="row between"><span class="badge">${esc(KAT[r.kategori] || r.kategori)}</span>${st(G[r.guven], 'Güven: ' + ({ yuksek: 'yüksek', orta: 'orta', dusuk: 'düşük' }[r.guven] || r.guven))}</div>${olgu(esc(r.sinyal) + ` <span class="small muted">${r.tarih ? date(r.tarih) + ' · ' : ''}${link(r.kaynak_url, 'kaynak')}</span>`)}${yorum(esc(r.yorum) + (r.yon ? ` <span class="small muted">(${esc(r.yon)})</span>` : ''))}</li>`).join('') || '<li class="empty">Sinyal yok.</li>'}</ul></div>`;
+    return html;
   }
 
   /* ---- Kurallar ---- */
   async function tabKural(T, $t, h) {
     const [r, sum] = await Promise.all([J(`rules/${T}.json`), J('summary.json')]);
     if (!r) { $t.innerHTML = '<div class="card"><p class="empty">veri yok</p></div>'; return; }
-    const cls = r.durum === 'tetiklendi_kosul_ok' ? 'sari' : r.durum === 'tetiklendi_kosul_yok' ? 'kirmizi' : 'bilgi';
+    const cls = r.durum === 'tetiklendi_kosul_yok' ? 'kirmizi' : (r.durum || '').startsWith('tetiklendi') ? 'sari' : 'bilgi';
     let html = `<div class="card"><div class="row between"><h2 style="margin:0">Kural bazlı alım takibi</h2>${taslak(r.onay)}</div>
       <p class="muted small">${esc(r.not)}</p>
       <div class="alert ${cls}">${esc(r.mesaj || '')}</div>
       <div class="row" style="gap:24px"><div><div class="muted small">52h zirveden (kapanış)</div><div class="hero-num">${pct(r.zirveden_uzaklik, 1, true)}</div></div>
       <div><div class="muted small">Tez durumu (koşul: ${esc(r.kosul)})</div><div>${st(r.tez_durumu, GENEL[r.tez_durumu])}</div></div></div>
-      <div class="sub-label">Kademeler</div><ul class="plain">${(r.kademeler || []).map(k => `<li class="row between"><span><b>−%${esc(k.dusus)}</b> · ${esc(k.not)}</span>${k.tetiklendi ? st(r.kosul_saglaniyor ? 'sari' : 'kirmizi', 'Tetiklendi') : st('veri_yok', 'Bekliyor')}</li>`).join('')}</ul></div>`;
+      <div class="sub-label">Kademeler</div><ul class="plain">${(r.kademeler || []).map(k => `<li class="row between"><span><b>−%${esc(k.dusus)}</b> · ${esc(k.not)}</span>${k.tetiklendi ? st(r.kosul_saglaniyor === false ? 'kirmizi' : 'sari', 'Tetiklendi') : st('veri_yok', 'Bekliyor')}</li>`).join('')}</ul></div>`;
     html += `<div class="section card"><h2>Düşüş şirkete özel mi, sektör/piyasa mı?</h2>${r.dusus_kaynagi_aciklama ? yorum(esc(r.dusus_kaynagi_aciklama)) : ''}
       <div class="tbl-wrap"><table><thead><tr><th>Sembol</th><th class="n">Zirveden</th><th class="n">1 ay</th><th class="n">3 ay</th><th class="n">Hisse − benchmark</th></tr></thead><tbody>
       <tr style="font-weight:700"><td>${esc(T)}</td><td class="n">${pct(r.zirveden_uzaklik, 1, true)}</td><td class="n">${pct((h.fiyat || {}).degisim_1a, 1, true)}</td><td class="n">${pct((h.fiyat || {}).degisim_3a, 1, true)}</td><td></td></tr>
@@ -489,37 +526,35 @@
 
   /* ================= HAFTALIK ================= */
   async function viewWeekly(week) {
-    const idx = await J('weekly/index.json');
-    if (!idx || !idx.length) { $app.innerHTML = noData(); return; }
-    week = week || idx[idx.length - 1];
-    const w = await J(`weekly/${week}.json`);
-    if (!w) { $app.innerHTML = `<p>${esc(week)} bulunamadı.</p>`; return; }
-    let html = `<div class="row between"><h1 style="margin:0">Haftalık Özet</h1>
-      <select id="wSel" aria-label="Hafta">${idx.slice().reverse().map(k => `<option ${k === week ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></div>
-      <p class="muted small">${date(w.baslangic)} – ${date(w.bitis)} · ${w.durum === 'kapanis' ? 'Hafta kapandı' : 'Hafta devam ediyor (günlük güncellenir)'} · ${dt(w.guncelleme)}</p>`;
-    const o = w.okuma;
-    if (o) {
-      html += `<div class="card"><h2>Haftanın okuması</h2>${yorum(esc(o.genel))}${(o.bu_hafta_okunacaklar || []).length ? `<div class="sub-label">Bu hafta okunacaklar</div><ul>${o.bu_hafta_okunacaklar.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}<p class="muted small">${esc(o.not || '')} ${esc(o.model || '')}</p></div>`;
-    } else html += `<div class="card"><p class="muted">Claude haftalık okuması yok (ANTHROPIC_API_KEY gerekli). Aşağıdaki derleme tamamen veriden üretilir.</p></div>`;
-    if ((w.sinyaller || []).length) html += `<div class="section card"><h2>Bu haftanın sinyalleri</h2><ul class="plain">${w.sinyaller.map(s => `<li><span class="tag ${s.yon === 'olumlu' ? 'olumlu' : 'dikkat'}">${esc(s.tur_adi)}</span> <b>${esc(s.ticker)}</b> ${esc(s.aciklama)} <span class="muted small">${date(s.tarih)} · ${px(s.fiyat)}</span></li>`).join('')}</ul></div>`;
-    (w.hisseler || []).forEach(h => {
-      const f = h.fiyat || {}, tz = h.tez || {}, k = h.kural || {};
-      html += `<div class="section card"><div class="row between"><h2 style="margin:0"><a href="#/h/${esc(h.ticker)}">${esc(h.ticker)}</a> <span class="muted" style="font-weight:400;font-size:.9rem">${esc(h.ad)}</span></h2>${st(tz.genel, GENEL[tz.genel])}</div>
-        ${o && o.hisseler && o.hisseler[h.ticker] ? yorum(esc(o.hisseler[h.ticker])) : ''}
-        <div class="split section"><div><div class="sub-label" style="margin-top:0">Fiyat (hafta)</div>
-          <div class="kv"><span>${esc(h.ticker)}</span><b>${pct(h.haftalik_degisim, 1, true)}</b></div>
-          ${Object.entries(h.benchmark_haftalik || {}).map(([b, v]) => `<div class="kv"><span>${esc(b)}</span><b>${pct(v, 1, true)}</b></div>`).join('')}
-          <div class="kv"><span>Zirveden</span><b>${pct(f.zirveden_uzaklik, 1, true)}</b></div></div>
-        <div><div class="sub-label" style="margin-top:0">Tez sütunları</div><div class="pills">${(tz.sutunlar || []).map(p => `<span class="pill"><span class="dot ${esc(p.durum)}"></span>${esc(p.ad)}</span>`).join('')}</div>
-          ${k.mesaj ? `<p class="small" style="margin-top:6px">◆ ${esc(k.mesaj)}</p>` : ''}</div></div>
-        ${h.yeni_bilanco ? `<div class="alert bilgi">📄 Bu hafta yeni ${esc(h.yeni_bilanco.form)}: ${link(h.yeni_bilanco.url, 'dosya')} — <a href="#/h/${esc(h.ticker)}/bilanco">analizi oku</a></div>` : ''}
-        <div class="sub-label">Insider (bu hafta)</div><p class="small">${h.insider_hafta && h.insider_hafta.islem ? Object.entries(h.insider_hafta.kodlar).map(([c, n]) => `${esc(c)}: ${n}`).join(' · ') : 'İşlem yok.'} ${(h.insider_uyarilar || []).filter(u => u.etiket === 'dikkat').map(u => `<br>⚠ ${esc(u.metin)}`).join('')}</p>
-        <div class="sub-label">Öne çıkan gelişmeler</div>${(h.gelismeler || []).length ? `<ul class="plain small">${h.gelismeler.map(g => `<li>${effectIcon(g.etki)} ${link(g.kaynak_url, g.baslik)} <span class="muted">${date(g.tarih)}</span>${g.yorum ? yorum(esc(g.yorum)) : ''}</li>`).join('')}</ul>` : '<p class="empty small">veri yok</p>'}
-        ${(h.radar || []).length ? `<div class="sub-label">Radar (orta/yüksek güven — gürültülü)</div><ul class="small">${h.radar.map(s => `<li>${esc(s.sinyal)} ${link(s.kaynak_url, 'kaynak')}</li>`).join('')}</ul>` : ''}
-      </div>`;
-    });
+    const [idx, roll, sum] = await Promise.all([J('weekly/index.json'), J('weekly/latest.json'), J('summary.json')]);
+    const weeks = (idx || []).slice().reverse();
+    week = week || weeks[0];
+    const w = week ? await J(`weekly/${week}.json`) : null;
+    let html = `<div class="row between"><h1 style="margin:0">Haftalık Özet</h1>${weeks.length ? `<select id="wSel" aria-label="Hafta">${weeks.map(k => `<option ${k === week ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select>` : ''}</div>`;
+    if (w && w.tur === 'sali_raporu') {
+      html += `<p class="muted small">Salı raporu · ${date(w.rapor_tarihi)} · ${esc(w.model || '')} · Wall Street analisti gözüyle derin analiz; Çarşamba DCA'sından önce okumak için.</p>`;
+      html += `<div class="card"><h2>Çarşamba DCA tablosu</h2><div class="tbl-wrap"><table><thead><tr><th>Hisse</th><th>Tez</th><th>Kural</th><th>Claude notu</th></tr></thead><tbody>${(w.dca_tablosu || []).map(r => `<tr><td><a href="#/h/${esc(r.ticker)}/sali">${esc(r.ticker)}</a></td><td>${st(r.tez, GENEL[r.tez])}</td><td class="small">${esc((r.kural || {}).mesaj || '')}</td><td class="small">${esc((r.claude_notu || {}).not || '')}</td></tr>`).join('')}</tbody></table></div><p class="muted small">Bilgi amaçlıdır; al/sat talimatı değildir.</p></div>`;
+      Object.entries(w.hisseler || {}).forEach(([T, h]) => {
+        html += `<details class="section card" open><summary style="font-size:1.15rem">${esc(T)} <span class="muted" style="font-weight:400;font-size:.9rem">${esc(((sum || {}).hisseler || {})[T] ? sum.hisseler[T].ad : '')}</span></summary>${saliStockHtml(T, h)}</details>`;
+      });
+    } else {
+      html += `<div class="card"><p class="muted">Henüz Salı raporu yok. Her Salı 23:00 (Berlin) Claude ile üretilir; elle üretmek için Actions → Run workflow → "sali_raporu".</p></div>`;
+    }
+    if (roll) {
+      html += `<h2 class="section">Son 7 gün (günlük Python derlemesi)</h2><p class="muted small">${date(roll.baslangic)} – ${date(roll.bitis)} · ${dt(roll.guncelleme)} · ${esc(roll.not)}</p>`;
+      (roll.hisseler || []).forEach(h => {
+        const f = h.fiyat || {};
+        html += `<div class="section card"><div class="row between"><h3 style="margin:0"><a href="#/h/${esc(h.ticker)}">${esc(h.ticker)}</a></h3>${st((h.tez || {}).genel, GENEL[(h.tez || {}).genel])}</div>
+          <div class="kv"><span>Hafta</span><b>${pct(f.haftalik, 1, true)} ${Object.entries(h.benchmark_haftalik || {}).map(([b, v]) => `· ${esc(b)} ${pct(v, 1, true)}`).join(' ')}</b></div>
+          <div class="kv"><span>Zirveden</span><b>${pct(f.zirveden, 1, true)}</b></div>
+          ${(h.buyuk_hareketler || []).map(m => `<div class="alert sari small">⚡ ${date(m.tarih)} ${pct(m.hareket, 2, true)} — ${esc(SINIF[m.on_siniflama] || '')} · <a href="#/h/${esc(h.ticker)}/hareket">detay</a></div>`).join('')}
+          ${(h.sinyaller || []).map(x => `<div class="small"><span class="tag ${x.yon === 'olumlu' ? 'olumlu' : 'dikkat'}">${esc(x.tur_adi)}</span> ${esc(x.aciklama)}</div>`).join('')}
+          <div class="sub-label">Başlıklar</div><ul class="small">${(h.basliklar || []).slice(0, 8).map(x => `<li>${link(x.url, x.baslik)} <span class="muted">${esc(x.kaynak)}</span></li>`).join('') || '<li class="empty">yok</li>'}</ul></div>`;
+      });
+    }
     $app.innerHTML = html;
-    document.getElementById('wSel').onchange = e => { location.hash = '#/haftalik/' + e.target.value; };
+    const sel = document.getElementById('wSel');
+    if (sel) sel.onchange = e => { location.hash = '#/haftalik/' + e.target.value; };
   }
 
   /* ================= KARNE ================= */
@@ -528,7 +563,7 @@
     if (!s) { $app.innerHTML = noData(); return; }
     let html = `<h1>Sinyal karnesi</h1><p class="muted small">${esc(s.not)} Kayıt: <code>data/signals.jsonl</code> · ${dt(s.guncelleme)}</p>
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Sinyal türü</th><th>Beklenen</th><th class="n">Adet</th>${s.ufuklar.map(h => `<th class="n">${h} gün isabet</th><th class="n">${h} gün ort. göreli</th>`).join('')}</tr></thead><tbody>
-      ${s.ozet.map(o => `<tr><td>${esc(o.ad)}</td><td>${o.beklenen_yon === 'olumlu' ? '▲ QQQ üstü' : '▼ QQQ altı'}</td><td class="n">${o.adet}</td>${s.ufuklar.map(h => { const u = o.ufuklar[h] || {}; return `<td class="n">${u.n ? pct(u.isabet_orani, 0) + ` <span class="muted small">(n=${u.n})</span>` : '—'}</td><td class="n">${u.n ? pct(u.ort_goreli, 1, true) : '—'}</td>`; }).join('')}</tr>`).join('')}
+      ${s.ozet.map(o => `<tr><td>${esc(o.ad)}</td><td>${o.beklenen_yon === 'olumlu' ? '▲ QQQ üstü' : o.beklenen_yon === 'olumsuz' ? '▼ QQQ altı' : '— (isabet ölçülmez)'}</td><td class="n">${o.adet}</td>${s.ufuklar.map(h => { const u = o.ufuklar[h] || {}; return `<td class="n">${u.n ? pct(u.isabet_orani, 0) + ` <span class="muted small">(n=${u.n})</span>` : '—'}</td><td class="n">${u.n ? pct(u.ort_goreli, 1, true) : '—'}</td>`; }).join('')}</tr>`).join('')}
       </tbody></table></div></div>
       <div class="section card"><h2>Tüm sinyaller</h2><div class="tbl-wrap"><table><thead><tr><th>Tarih</th><th>Hisse</th><th>Tür</th><th>Açıklama</th><th class="n">Fiyat</th>${s.ufuklar.map(h => `<th class="n">${h}g (göreli)</th>`).join('')}</tr></thead><tbody>
       ${s.sinyaller.map(x => `<tr><td class="n">${esc(x.tarih)}</td><td><a href="#/h/${esc(x.ticker)}">${esc(x.ticker)}</a></td><td><span class="tag ${x.yon === 'olumlu' ? 'olumlu' : 'dikkat'}">${esc(x.tur_adi)}</span>${x.baslangic_kaydi ? ' <span class="badge" title="Sistem ilk kurulduğunda mevcut durumdan kaydedildi">ilk kayıt</span>' : ''}</td><td class="small">${esc(x.aciklama)}</td><td class="n">${px(x.fiyat)}</td>${s.ufuklar.map(h => { const r = x.sonuclar[h]; return `<td class="n">${r ? `${pct(r.getiri, 1, true)} <span class="small ${r.isabet ? 'chg up' : 'chg down'}">(${pp(r.goreli)})</span>` : '<span class="muted small">bekliyor</span>'}</td>`; }).join('')}</tr>`).join('') || `<tr><td colspan="${5 + s.ufuklar.length}" class="empty">Henüz sinyal yok.</td></tr>`}
@@ -540,30 +575,32 @@
   async function viewSystem() {
     const [runs, cfg, usage] = await Promise.all([J('runs.json', true), J('config.json'), JL('usage.jsonl')]);
     if (!runs) { $app.innerHTML = noData(); return; }
-    const r0 = runs[0] || {};
+    const py = runs.find(r => r.tur !== 'claude') || {}, cr = runs.find(r => r.tur === 'claude');
     const since = new Date(Date.now() - 30 * 864e5).toISOString();
     const u30 = usage.filter(u => u.zaman >= since);
-    const tot = u30.reduce((a, u) => { a.i += u.input_tokens; a.o += u.output_tokens; a.w += u.web_search; a.c += u.tahmini_maliyet_usd; return a; }, { i: 0, o: 0, w: 0, c: 0 });
+    const tot = u30.reduce((a, u) => { a.i += u.input_tokens; a.o += u.output_tokens; a.w += u.web_search; a.c += (u.api_esdegeri_usd || 0); return a; }, { i: 0, o: 0, w: 0, c: 0 });
     const byTask = {};
-    u30.forEach(u => { const b = byTask[u.gorev] = byTask[u.gorev] || { n: 0, c: 0, i: 0, o: 0, w: 0 }; b.n++; b.c += u.tahmini_maliyet_usd; b.i += u.input_tokens; b.o += u.output_tokens; b.w += u.web_search; });
+    u30.forEach(u => { const b = byTask[u.gorev] = byTask[u.gorev] || { n: 0, c: 0, i: 0, o: 0, w: 0 }; b.n++; b.c += (u.api_esdegeri_usd || 0); b.i += u.input_tokens; b.o += u.output_tokens; b.w += u.web_search; });
     let html = `<h1>Sistem</h1><div class="grid">
-      <div class="card"><h2>Son çalışma</h2>
-        <div class="kv"><span>Zaman</span><b>${dt(r0.bitis)}</b></div>
-        <div class="kv"><span>Claude</span><b>${r0.llm_aktif ? '✓ aktif · ' + esc(r0.model) : '✕ kapalı (ANTHROPIC_API_KEY yok)'}</b></div>
-        <div class="kv"><span>Finnhub</span><b>${r0.finnhub_aktif ? '✓ aktif' : '✕ kapalı (FINNHUB_API_KEY yok)'}</b></div>
-        <div class="kv"><span>SEC User-Agent</span><b>${r0.sec_user_agent_tanimli ? '✓ tanımlı' : '✕ geçici (SEC_USER_AGENT ekle)'}</b></div>
-        <div class="kv"><span>SEC istek sayısı</span><b>${esc(r0.sec_istek)}</b></div>
-        <div class="kv"><span>Hatalar</span><b>${(r0.hatalar || []).length}</b></div>
-        ${(r0.hatalar || []).map(h => `<div class="alert kirmizi small">${esc(h.adim)} ${esc(h.ticker || '')}: ${esc(h.hata)}</div>`).join('')}</div>
-      <div class="card"><h2>Claude kullanımı (son 30 gün)</h2>
-        <div class="hero-num">$${NF(2).format(tot.c)}</div><p class="muted small">tahmini maliyet · ${u30.length} çağrı · input ${NF(0).format(tot.i)} · output ${NF(0).format(tot.o)} token · ${tot.w} web araması</p>
-        <div class="tbl-wrap"><table><thead><tr><th>Görev</th><th class="n">Çağrı</th><th class="n">Input</th><th class="n">Output</th><th class="n">Arama</th><th class="n">$</th></tr></thead><tbody>
-        ${Object.entries(byTask).map(([k, b]) => `<tr><td>${esc(k)}</td><td class="n">${b.n}</td><td class="n">${NF(0).format(b.i)}</td><td class="n">${NF(0).format(b.o)}</td><td class="n">${b.w}</td><td class="n">${NF(3).format(b.c)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">kullanım yok</td></tr>'}
-        </tbody></table></div><p class="muted small">Tahmin, config/settings.yaml'daki fiyatlarla hesaplanır. Kesin tutar için Anthropic Console'a bak.</p></div></div>
-      <div class="section card"><h2>Çalışma geçmişi</h2><div class="tbl-wrap"><table><thead><tr><th>Bitiş</th><th>Claude</th><th class="n">Çağrı</th><th class="n">Input tok</th><th class="n">Output tok</th><th class="n">Arama</th><th class="n">$ (tahmini)</th><th class="n">Hata</th></tr></thead><tbody>
-      ${runs.slice(0, 40).map(r => `<tr><td>${dt(r.bitis)}</td><td>${r.llm_aktif ? '✓' : '✕'}</td><td class="n">${r.token.cagri}</td><td class="n">${NF(0).format(r.token.input_tokens)}</td><td class="n">${NF(0).format(r.token.output_tokens)}</td><td class="n">${r.token.web_search}</td><td class="n">${NF(4).format(r.token.tahmini_maliyet_usd)}</td><td class="n">${(r.hatalar || []).length}</td></tr>`).join('')}
+      <div class="card"><h2>Son günlük çalışma (Python)</h2>
+        <div class="kv"><span>Zaman</span><b>${dt(py.bitis)}</b></div>
+        <div class="kv"><span>SEC EDGAR</span><b>${py.sec_aktif ? '✓ aktif' : '✕ kapalı (SEC_USER_AGENT secret yok)'}</b></div>
+        <div class="kv"><span>Finnhub</span><b>${py.finnhub_aktif ? '✓ aktif' : '✕ kapalı (FINNHUB_API_KEY yok)'}</b></div>
+        <div class="kv"><span>Claude bekleyen bilanço</span><b>${(py.bekleyen_bilanco || []).map(esc).join(', ') || 'yok'}</b></div>
+        <div class="kv"><span>Hatalar</span><b>${(py.hatalar || []).length}</b></div>
+        ${(py.hatalar || []).map(h => `<div class="alert kirmizi small">${esc(h.adim)} ${esc(h.ticker || '')}: ${esc(h.hata)}</div>`).join('')}</div>
+      <div class="card"><h2>Claude (abonelik) — son 30 gün</h2>
+        <div class="hero-num">${u30.length} çağrı</div>
+        <p class="small">Model: ${esc((cr || {}).model || (cfg && cfg.settings && cfg.settings.claude ? cfg.settings.claude.model : ''))} · input ${NF(0).format(tot.i)} · output ${NF(0).format(tot.o)} token · ${tot.w} web araması</p>
+        <p class="muted small">Faturalama: Claude Code OAuth (Pro abonelik) — API faturası yok. "API eşdeğeri" sütunu sadece gösterge: ≈ $${NF(2).format(tot.c)}.</p>
+        ${cr ? `<div class="kv"><span>Son Claude çalışması</span><b>${dt(cr.bitis)}</b></div>${(cr.hatalar || []).map(h => `<div class="alert kirmizi small">${esc(h.adim)} ${esc(h.ticker || '')}: ${esc(h.hata)}</div>`).join('')}` : '<p class="empty small">Henüz Claude çalışması yok.</p>'}
+        <div class="tbl-wrap"><table><thead><tr><th>Görev</th><th class="n">Çağrı</th><th class="n">Input</th><th class="n">Output</th><th class="n">Arama</th><th class="n">API eşd. $</th></tr></thead><tbody>
+        ${Object.entries(byTask).map(([k, b]) => `<tr><td>${esc(k)}</td><td class="n">${b.n}</td><td class="n">${NF(0).format(b.i)}</td><td class="n">${NF(0).format(b.o)}</td><td class="n">${b.w}</td><td class="n">${NF(2).format(b.c)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">kullanım yok</td></tr>'}
+        </tbody></table></div></div></div>
+      <div class="section card"><h2>Çalışma geçmişi</h2><div class="tbl-wrap"><table><thead><tr><th>Bitiş</th><th>Tür</th><th>Ayrıntı</th><th class="n">Hata</th></tr></thead><tbody>
+      ${runs.slice(0, 50).map(r => `<tr><td>${dt(r.bitis)}</td><td>${esc({ gunluk_python: 'Günlük (Python)', offline_yeniden_hesap: 'Yeniden hesap', claude: 'Claude' }[r.tur] || r.tur)}</td><td class="small">${r.tur === 'claude' ? `${r.claude ? r.claude.cagri + ' çağrı · ' + NF(0).format(r.claude.input_tokens + r.claude.output_tokens) + ' token' : ''} · ${r.gorevler && r.gorevler.sali_raporu ? 'Salı raporu ' : ''}${r.gorevler && r.gorevler.bilanco ? 'Bilanço: ' + esc(r.gorevler.bilanco) : ''}` : `SEC ${r.sec_aktif ? '✓' : '✕'} · Finnhub ${r.finnhub_aktif ? '✓' : '✕'}`}</td><td class="n">${(r.hatalar || []).length}</td></tr>`).join('')}
       </tbody></table></div></div>`;
-    if (cfg) html += `<div class="section card"><h2>Konfigürasyon</h2><p class="small">Takip edilen: ${cfg.stocks.map(s => `<b>${esc(s.ticker)}</b> (${(s.benchmarks || []).map(esc).join(', ')})`).join(' · ')}</p><p class="muted small">Hisse eklemek: <code>config/stocks.yaml</code> dosyasına bir satır. Tez: <code>config/theses.yaml</code>, kurallar: <code>config/rules.yaml</code>. Model: ${esc(cfg.model)}.</p></div>`;
+    if (cfg) html += `<div class="section card"><h2>Konfigürasyon</h2><p class="small">Takip edilen: ${cfg.stocks.map(s => `<b>${esc(s.ticker)}</b> (${(s.benchmarks || []).map(esc).join(', ')})`).join(' · ')}</p><p class="muted small">Hisse eklemek: <code>config/stocks.yaml</code> dosyasına bir satır. Tez: <code>config/theses.yaml</code>, kurallar: <code>config/rules.yaml</code>.</p></div>`;
     $app.innerHTML = html;
   }
 

@@ -19,6 +19,7 @@ TUR = {
     "cikis_kriteri": ("Önceden yazılmış çıkış kriteri tetiklendi", "olumsuz"),
     "kural_kademe_tez_saglam": ("Düşüş kademesi tetiklendi, tez sağlam", "olumlu"),
     "kural_kademe_tez_bozuk": ("Düşüş kademesi tetiklendi, tez kırmızı", "olumsuz"),
+    "kural_kademe_tez_bilinmiyor": ("Düşüş kademesi tetiklendi, tez verisi yok", "notr"),
     "insider_alim": ("Yönetimden açık piyasa alımı (P)", "olumlu"),
     "insider_kume_satis": ("Kümelenmiş yönetici satışı", "olumsuz"),
     "bilanco_kirmizi_bayrak": ("Yeni bilançoda kırmızı bayrak", "olumsuz"),
@@ -62,7 +63,8 @@ def detect(ticker: str, thesis_eval: dict, rule_eval: dict, insider: dict, quali
     lvl = max([k["dusus"] for k in rule_eval.get("kademeler", []) if k["tetiklendi"]], default=0)
     plvl = st.get("kademe", 0)
     if lvl > plvl:
-        tur = "kural_kademe_tez_saglam" if rule_eval.get("kosul_saglaniyor") else "kural_kademe_tez_bozuk"
+        k = rule_eval.get("kosul_saglaniyor")
+        tur = {True: "kural_kademe_tez_saglam", False: "kural_kademe_tez_bozuk", None: "kural_kademe_tez_bilinmiyor"}[k]
         emit(tur, f"Zirveden %{rule_eval.get('zirveden_uzaklik')} — kademe -%{lvl}; "
                   f"{rule_eval.get('dusus_kaynagi_aciklama', '')}", f"{lvl}{today()}")
     # insider P alımları
@@ -132,7 +134,7 @@ def scorecard(horizons: list[int]) -> dict:
             qret = (qc[1] / qbase - 1) * 100 if (qc and qbase) else None
             rel = ret - qret if (ret is not None and qret is not None) else None
             hit = None
-            if rel is not None:
+            if rel is not None and s["yon"] in ("olumlu", "olumsuz"):
                 hit = rel > 0 if s["yon"] == "olumlu" else rel < 0
             r["sonuclar"][str(h)] = {"getiri": rnd(ret), "qqq": rnd(qret), "goreli": rnd(rel), "isabet": hit}
             a = agg.setdefault(s["tur"], {}).setdefault(str(h), {"n": 0, "isabet": 0, "goreli_toplam": 0.0})
