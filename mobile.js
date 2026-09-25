@@ -98,6 +98,8 @@ body[data-ui="mobile"] #app{
 .mob .lg.on{background:var(--ink);color:var(--paper)}
 .mob .lg i{width:9px;height:9px;border-radius:999px;display:block}
 .mob .lg b{font-weight:700;opacity:.55}
+.mob .past{opacity:.38}
+.mob .wday.past{opacity:.5}
 .mob .dim{opacity:.16}
 .mob .srow{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:14px;width:100%;text-align:left;margin-bottom:8px}
 .mob .toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px}
@@ -313,7 +315,7 @@ body[data-ui="mobile"] #app{
     const todayD = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
     for (let m = 0; m < 12; m++) {
       const isCur = V.y === TODAY.getFullYear() && m === TODAY.getMonth();
-      const monthPast = false;
+      const monthPast = V.y < TODAY.getFullYear() || (V.y === TODAY.getFullYear() && m < TODAY.getMonth());
       const el = document.createElement('div'); el.className = 'ymo';
       let cells = '';
       for (let i = 0; i < firstDow(V.y, m); i++) cells += '<div class="ycell"></div>';
@@ -328,7 +330,7 @@ body[data-ui="mobile"] #app{
           bg = evs.length ? evs[0].color : INK;
           if (evs.length) ring = 'box-shadow:inset 0 0 0 1.5px ' + INK + ';';
         }
-        const dim = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
+        const dim = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : (k < TKEY ? ' past' : '');
         cells += `<div class="ycell${dim}" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>`;
       }
       el.innerHTML = `<div class="ymo-h">
@@ -427,7 +429,7 @@ body[data-ui="mobile"] #app{
           bg = evs.length ? evs[0].color : GREEN;
           if (evs.length) ring = `box-shadow:inset 0 0 0 2px ${GREEN};`;
         }
-        const dimc = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
+        const dimc = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : (k < TKEY ? ' past' : '');
         const dots = dotCols.map(c => `<div class="mdot" style="background:${c}"></div>`).join('');
         return `<div class="mcell${dimc}">
           <div class="mnum" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>
@@ -489,7 +491,7 @@ body[data-ui="mobile"] #app{
       const k = dkey(dt);
       const evs = dayEvents(dt.getFullYear(), dt.getMonth(), dt.getDate());
       const today = k === TKEY;
-      const day = document.createElement('div'); day.className = 'wday';
+      const day = document.createElement('div'); day.className = 'wday' + (k < TKEY ? ' past' : '');
       day.innerHTML = `<div class="wleft">
           <div class="wdow">${DOW[i]}</div>
           <div class="wnum" style="color:${today ? '#f6f5f2' : INK};background:${today ? GREEN : 'transparent'}">${dt.getDate()}</div>
