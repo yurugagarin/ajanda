@@ -1,0 +1,36 @@
+# Genel ayarlar. Gizli anahtarlar burada DEĞİL, GitHub Secrets'ta durur.
+default_benchmarks: [QQQ, SMH]
+
+llm:
+  # Model, CLAUDE_MODEL ortam değişkeninden okunur; yoksa bu değer kullanılır.
+  default_model: claude-sonnet-5
+  # Web search araç sürümü (docs: web_search_20260318 = dinamik filtreleme + response_inclusion)
+  web_search_tool: web_search_20260318
+  # Maliyet tahmini için fiyatlar (USD / 1M token). Model değişirse güncelle.
+  prices_per_mtok:
+    claude-sonnet-5: {input: 2.0, output: 10.0}
+    claude-opus-5: {input: 5.0, output: 25.0}
+    claude-haiku-4-5: {input: 1.0, output: 5.0}
+  web_search_usd_per_1000: 10.0
+  # Görev başına web search üst sınırları (maliyet kontrolü)
+  max_searches:
+    news: 3          # günlük, hisse başına
+    radar: 6         # haftalık, hisse başına
+    devils_advocate: 3   # çeyreklik, hisse başına
+  # Radar kaç günde bir yenilensin
+  radar_every_days: 7
+
+news:
+  lookback_days: 7
+  top_n: 3
+
+insider:
+  windows: [90, 180]
+  # Kümelenmiş satış: bu kadar gün içinde en az N farklı yönetici satış yaptıysa
+  cluster_window_days: 14
+  cluster_min_insiders: 3
+  # "Alım yokken fiyat yükseldi" uyarısı için 180 günlük fiyat artışı eşiği (%)
+  rally_without_buys_pct: 30
+
+signals:
+  horizons_days: [30, 90, 180]

@@ -1,0 +1,129 @@
+name: Hisse analiz pipeline
+
+on:
+  schedule:
+    # Hafta içi her gün 05:00 UTC
+    - cron: "0 5 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      force_filings:
+        description: "Bilanço analizini yeni dosya olmasa da yeniden çalıştır"
+        type: boolean
+        default: false
+      force_radar:
+        description: "Öncü sinyal radarını şimdi yenile"
+        type: boolean
+        default: false
+      force_weekly:
+        description: "Haftalık özet okumasını yeniden üret"
+        type: boolean
+        default: false
+      force_devil:
+        description: "Şeytanın avukatını yeniden üret"
+        type: boolean
+        default: false
+      skip_llm:
+        description: "Claude adımlarını atla (maliyet sıfır)"
+        type: boolean
+        default: false
+      tickers:
+        description: "Sadece bu hisseler (virgülle, boş = hepsi)"
+        type: string
+        default: ""
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "config/**"
+      - "pipeline/**"
+      - ".github/workflows/hisse.yml"
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: hisse-pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Bağımlılıklar
+        run: pip install -r pipeline/requirements.txt
+
+      # SEC belgeleri (10-Q/10-K HTML, Form 4 XML) repoya değil Actions cache'ine yazılır
+      - name: SEC dosya cache'i
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: sec-cache-${{ github.run_id }}
+          restore-keys: sec-cache-
+
+      - name: Pipeline'ı çalıştır
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+          # claude/** dallarına yapılan geliştirme push'larında Claude çağrılmaz (commit mesajında [llm] yoksa)
+          SKIP_LLM: ${{ (inputs.skip_llm || (github.event_name == 'push' && github.ref != 'refs/heads/main' && !contains(github.event.head_commit.message, '[llm]'))) && '1' || '' }}
+        run: |
+          ARGS=""
+          [ "${{ inputs.force_filings }}" = "true" ] && ARGS="$ARGS --force-filings"
+          [ "${{ inputs.force_radar }}" = "true" ] && ARGS="$ARGS --force-radar"
+          [ "${{ inputs.force_weekly }}" = "true" ] && ARGS="$ARGS --force-weekly"
+          [ "${{ inputs.force_devil }}" = "true" ] && ARGS="$ARGS --force-devil"
+          [ -n "${{ inputs.tickers }}" ] && ARGS="$ARGS --tickers ${{ inputs.tickers }}"
+          python pipeline/run.py $ARGS
+
+      - name: Token kullanımı özeti
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          try:
+              r = json.load(open("data/runs.json"))[0]
+          except Exception as e:
+              print("runs.json okunamadı:", e); raise SystemExit
+          t = r["token"]
+          lines = [f"### Çalışma {r['id']}",
+                   f"- Claude aktif: {r['llm_aktif']} (model {r['model']}) · Finnhub: {r['finnhub_aktif']} · SEC UA: {r['sec_user_agent_tanimli']}",
+                   f"- Çağrı: {t['cagri']} · input: {t['input_tokens']:,} · output: {t['output_tokens']:,} · web search: {t['web_search']} · tahmini maliyet: ${t['tahmini_maliyet_usd']:.4f}",
+                   f"- Hatalar: {len(r['hatalar'])}"] + [f"  - {h['adim']} {h['ticker']}: {h['hata']}" for h in r["hatalar"]]
+          open(os.environ["GITHUB_STEP_SUMMARY"], "a").write("\n".join(lines) + "\n")
+          print("\n".join(lines))
+          PY
+
+      - name: Veriyi commit'le
+        run: |
+          git config user.name "hisse-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "Değişiklik yok"; exit 0
+          fi
+          git commit -m "veri: $(date -u +%Y-%m-%dT%H:%MZ) otomatik güncelleme"
+          for i in 1 2 3; do
+            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && break
+            sleep 5
+          done
+
+      # Pages "branch'ten yayınla" modunda: bot push'u sonrası yeniden derlemeyi garantiye al
+      - name: GitHub Pages yeniden derleme iste
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages/builds" || true
