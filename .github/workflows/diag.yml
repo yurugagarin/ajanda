@@ -1,0 +1,21 @@
+name: diag (gecici)
+on:
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/diag.yml"]
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kaynak erişim testi
+        run: |
+          t() { code=$(curl -s -o /tmp/o -w "%{http_code}" -A "$2" -H "Accept-Encoding: gzip, deflate" --compressed "$1"); echo "[$code] $1 | UA=$2 | $(head -c 300 /tmp/o | tr '\n' ' ' | sed 's/<[^>]*>/ /g' | tr -s ' ')"; }
+          t "https://www.sec.gov/files/company_tickers.json" "ajanda-hisse-pipeline yurugagarin@users.noreply.github.com"
+          t "https://data.sec.gov/submissions/CIK0001045810.json" "ajanda-hisse-pipeline yurugagarin@users.noreply.github.com"
+          t "https://data.sec.gov/submissions/CIK0001045810.json" "Yuru Gagarin yurugagarin@users.noreply.github.com"
+          t "https://www.sec.gov/files/company_tickers.json" "Mozilla/5.0 (X11; Linux x86_64)"
+          t "https://query1.finance.yahoo.com/v8/finance/chart/NVDA?range=5d&interval=1d" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
+          t "https://stooq.com/q/d/l/?s=nvda.us&i=d" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
+          t "https://api.nasdaq.com/api/quote/NVDA/historical?assetclass=stocks&fromdate=2026-09-01&todate=2026-09-25&limit=5" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
+          t "https://api.nasdaq.com/api/quote/QQQ/historical?assetclass=etf&fromdate=2026-09-01&todate=2026-09-25&limit=5" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
+          t "https://finnhub.io/api/v1/quote?symbol=NVDA" "curl"
