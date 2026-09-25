@@ -1,5 +1,5 @@
 {
- "guncelleme": "2026-09-25T23:35:40+00:00",
+ "guncelleme": "2026-09-25T23:39:14+00:00",
  "ufuklar": [
   30,
   90,
@@ -102,7 +102,7 @@
    "tur": "kural_kademe_tez_saglam",
    "ad": "Düşüş kademesi tetiklendi, tez sağlam",
    "beklenen_yon": "olumlu",
-   "adet": 0,
+   "adet": 2,
    "ufuklar": {
     "30": {
      "n": 0,
@@ -214,6 +214,45 @@
    }
   }
  ],
- "sinyaller": [],
+ "sinyaller": [
+  {
+   "id": "466aa6434e31",
+   "tarih": "2026-09-25",
+   "ticker": "AAOI",
+   "tur": "kural_kademe_tez_saglam",
+   "tur_adi": "Düşüş kademesi tetiklendi, tez sağlam",
+   "yon": "olumlu",
+   "aciklama": "Zirveden %-54.72 — kademe -%40; Hisse, tüm benchmark'lardan en az 15 puan daha fazla düşmüş: düşüş ağırlıkla şirkete özel görünüyor.",
+   "fiyat": 101.03,
+   "fiyat_tarihi": "2026-09-24",
+   "qqq": 741.1,
+   "baslangic_kaydi": false,
+   "kayit_zamani": "2026-09-25T23:39:14+00:00",
+   "sonuclar": {
+    "30": null,
+    "90": null,
+    "180": null
+   }
+  },
+  {
+   "id": "3b09972b60df",
+   "tarih": "2026-09-25",
+   "ticker": "NOW",
+   "tur": "kural_kademe_tez_saglam",
+   "tur_adi": "Düşüş kademesi tetiklendi, tez sağlam",
+   "yon": "olumlu",
+   "aciklama": "Zirveden %-27.2 — kademe -%25; Hisse, tüm benchmark'lardan en az 10 puan daha fazla düşmüş: düşüş ağırlıkla şirkete özel görünüyor.",
+   "fiyat": 137.78,
+   "fiyat_tarihi": "2026-09-24",
+   "qqq": 741.1,
+   "baslangic_kaydi": false,
+   "kayit_zamani": "2026-09-25T23:39:14+00:00",
+   "sonuclar": {
+    "30": null,
+    "90": null,
+    "180": null
+   }
+  }
+ ],
  "not": "İsabet: sinyal sonrası hissenin QQQ'ya göre göreli getirisinin beklenen yönde olması. Az sayıda sinyalle istatistik anlamsızdır."
 }

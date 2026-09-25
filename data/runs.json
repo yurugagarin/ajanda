@@ -1,5 +1,80 @@
 [
  {
+  "id": "20260925T233743Z",
+  "baslangic": "2026-09-25T23:37:43+00:00",
+  "bitis": "2026-09-25T23:39:14+00:00",
+  "hisseler": [
+   "NVDA",
+   "META",
+   "NOW",
+   "AAOI"
+  ],
+  "llm_aktif": false,
+  "model": "claude-sonnet-5",
+  "finnhub_aktif": false,
+  "sec_user_agent_tanimli": false,
+  "sec_istek": 8,
+  "token": {
+   "cagri": 0,
+   "input_tokens": 0,
+   "output_tokens": 0,
+   "cache_read": 0,
+   "cache_write": 0,
+   "web_search": 0,
+   "tahmini_maliyet_usd": 0.0
+  },
+  "adimlar": {
+   "fiyat": {
+    "ok": 8,
+    "hata": 0,
+    "sure_sn": 89.5
+   },
+   "cik": {
+    "ok": 4,
+    "hata": 0,
+    "sure_sn": 1.3
+   },
+   "haber": {
+    "ok": 4,
+    "hata": 0,
+    "sure_sn": 0.0
+   },
+   "tez": {
+    "ok": 4,
+    "hata": 0,
+    "sure_sn": 0.0
+   },
+   "kural": {
+    "ok": 4,
+    "hata": 0,
+    "sure_sn": 0.0
+   },
+   "sinyal": {
+    "ok": 4,
+    "hata": 0,
+    "sure_sn": 0.0
+   },
+   "karne": {
+    "ok": 1,
+    "hata": 0,
+    "sure_sn": 0.0
+   },
+   "haftalik": {
+    "ok": 1,
+    "hata": 0,
+    "sure_sn": 0.0
+   }
+  },
+  "hatalar": [],
+  "argumanlar": {
+   "force_filings": false,
+   "force_radar": false,
+   "force_weekly": false,
+   "force_devil": false,
+   "tickers": ""
+  }
+ },
+ {
   "id": "20260925T233423Z",
   "baslangic": "2026-09-25T23:34:23+00:00",
   "bitis": "2026-09-25T23:35:40+00:00",
