@@ -14,9 +14,11 @@ from common import CACHE, DATA, RateLimitedSession, log, read_json, write_json
 
 _UA = os.environ.get("SEC_USER_AGENT", "").strip()
 if not _UA:
-    _UA = "ajanda-hisse-analiz github.com/yurugagarin/ajanda"
-    log.warning("SEC_USER_AGENT tanımlı değil; geçici User-Agent kullanılıyor. "
-                "SEC kuralı gereği 'Ad Soyad email@adres' formatında secret ekleyin.")
+    # Geçici beyan: repo sahibinin herkese açık GitHub noreply adresi. Kalıcı çözüm SEC_USER_AGENT secret'ı.
+    _owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "yurugagarin")
+    _UA = f"ajanda-hisse-pipeline {_owner}@users.noreply.github.com"
+    log.warning("SEC_USER_AGENT tanımlı değil; geçici User-Agent kullanılıyor (%s). "
+                "SEC kuralı gereği 'Ad Soyad email@adres' formatında secret ekleyin.", _UA)
 
 sess = RateLimitedSession(0.2, headers={"User-Agent": _UA, "Accept-Encoding": "gzip, deflate"}, name="SEC")
 
