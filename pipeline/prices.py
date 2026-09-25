@@ -14,6 +14,10 @@ from common import DATA, RateLimitedSession, log, now_iso, read_json, rnd, write
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"}
 yahoo = RateLimitedSession(0.5, headers=UA, name="Yahoo")
 stooq = RateLimitedSession(0.5, headers=UA, name="Stooq")
+nasdaq = RateLimitedSession(0.6, headers={**UA, "Accept": "application/json, text/plain, */*",
+                                          "Origin": "https://www.nasdaq.com", "Referer": "https://www.nasdaq.com/"},
+                            name="Nasdaq")
+ETF = {"QQQ", "SMH", "XLC", "IGV", "SPY", "SOXX", "XLK", "VGT", "IWM", "DIA", "VOO", "ARKK"}
 
 
 def _yahoo(sym: str) -> list[tuple[str, float]] | None:
@@ -40,6 +44,32 @@ def _yahoo(sym: str) -> list[tuple[str, float]] | None:
     return None
 
 
+def _nasdaq(sym: str) -> list[tuple[str, float]] | None:
+    to = dt.date.today()
+    fr = to - dt.timedelta(days=740)
+    classes = ["etf", "stocks"] if sym in ETF else ["stocks", "etf"]
+    for ac in classes:
+        r = nasdaq.get(f"https://api.nasdaq.com/api/quote/{sym}/historical",
+                       params={"assetclass": ac, "fromdate": fr.isoformat(), "todate": to.isoformat(), "limit": 9999},
+                       retries=2, timeout=30)
+        if r is None:
+            continue
+        try:
+            rows = ((r.json().get("data") or {}).get("tradesTable") or {}).get("rows") or []
+        except ValueError:
+            continue
+        out = []
+        for row in rows:
+            try:
+                m, d, y = row["date"].split("/")
+                out.append((f"{y}-{m}-{d}", round(float(str(row["close"]).replace("$", "").replace(",", "")), 4)))
+            except (KeyError, ValueError):
+                continue
+        if out:
+            return sorted(out)
+    return None
+
+
 def _stooq(sym: str) -> list[tuple[str, float]] | None:
     r = stooq.get("https://stooq.com/q/d/l/", params={"s": f"{sym.lower()}.us", "i": "d"}, retries=2)
     if r is None or not r.text.startswith("Date"):
@@ -61,9 +91,13 @@ def update(sym: str, finnhub=None) -> dict:
     if fresh:
         src = "Yahoo Finance (chart API)"
     else:
-        fresh = _stooq(sym)
+        fresh = _nasdaq(sym)
         if fresh:
-            src = "Stooq"
+            src = "Nasdaq.com (historical API)"
+        else:
+            fresh = _stooq(sym)
+            if fresh:
+                src = "Stooq"
     if fresh:
         # taze seri (bölünme düzeltmeli) çakışan tarihlerin üzerine yazar
         for d, c in fresh:
@@ -108,6 +142,13 @@ def stats(p: dict) -> dict:
     hi_d, hi = max(year, key=lambda x: x[1]) if year else (None, None)
     lo_d, lo = min(year, key=lambda x: x[1]) if year else (None, None)
 
+    note = "52 haftalık zirve kapanış fiyatları üzerinden hesaplandı (gün içi zirve değil)."
+    covered = (ld - D(kap[0][0])).days
+    fh_hi = p.get("finnhub_52h_zirve")
+    if covered < 300 and fh_hi:
+        hi, hi_d = float(fh_hi), p.get("finnhub_52h_zirve_tarih")
+        note = f"Fiyat geçmişi {covered} gün; 52 haftalık zirve Finnhub'dan (gün içi) alındı."
+
     def ch(x):
         return rnd((last / x - 1) * 100) if x else None
 
@@ -120,7 +161,7 @@ def stats(p: dict) -> dict:
         "degisim_ytd": ch(ytd_base[-1]) if ytd_base else None,
         "zirve_52h": hi, "zirve_52h_tarih": hi_d, "dip_52h": lo, "dip_52h_tarih": lo_d,
         "zirveden_uzaklik": rnd((last / hi - 1) * 100) if hi else None,
-        "zirve_notu": "52 haftalık zirve kapanış fiyatları üzerinden hesaplandı (gün içi zirve değil).",
+        "zirve_notu": note,
         "kaynak": p.get("kaynak"), "guncelleme": p.get("guncelleme"), "taze": p.get("taze", False),
         "finnhub_52h_zirve_gun_ici": p.get("finnhub_52h_zirve"),
     }

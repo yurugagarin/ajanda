@@ -168,7 +168,7 @@
           <div class="kv"><span>52h zirve (kapanış)</span><b>${px(f.zirve_52h)} · ${date(f.zirve_52h_tarih)}</b></div>
           <div class="kv"><span>Zirveden uzaklık</span><b>${pct(f.zirveden_uzaklik, 1, true)}</b></div>
           <div class="kv"><span>1 hafta / 1 ay / 3 ay</span><b>${pct(f.degisim_1h, 1, true)} / ${pct(f.degisim_1a, 1, true)} / ${pct(f.degisim_3a, 1, true)}</b></div>
-          <div class="muted small">Kaynak: ${esc(f.kaynak || 'veri yok')} · ${f.tarih ? date(f.tarih) : ''}</div></div>
+          <div class="muted small">Kaynak: ${esc(f.kaynak || 'veri yok')} · ${f.tarih ? date(f.tarih) : ''}${f.zirve_notu ? ' · ' + esc(f.zirve_notu) : ''}</div></div>
         <div><div class="sub-label" style="margin-top:0">Tez durumu (fiyattan bağımsız)</div>
           <div class="row">${st(tz.genel, GENEL[tz.genel])} ${taslak(tz.onay)}</div>
           <div class="pills" style="margin-top:6px">${(tz.sutunlar || []).map(p => `<span class="pill"><span class="dot ${esc(p.durum)}"></span>${esc(p.ad)}</span>`).join('')}</div></div>
