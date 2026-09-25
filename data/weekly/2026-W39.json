@@ -1,0 +1,327 @@
+{
+ "hafta": "2026-W39",
+ "baslangic": "2026-09-21",
+ "bitis": "2026-09-27",
+ "guncelleme": "2026-09-25T23:35:40+00:00",
+ "durum": "devam_ediyor",
+ "hisseler": [
+  {
+   "ticker": "NVDA",
+   "ad": "Nvidia",
+   "fiyat": {
+    "veri_yok": true
+   },
+   "haftalik_degisim": null,
+   "benchmark_haftalik": {
+    "QQQ": null,
+    "SMH": null
+   },
+   "tez": {
+    "genel": "veri_yok",
+    "onay": "taslak",
+    "sutunlar": [
+     {
+      "id": "buyume",
+      "ad": "Talep ve büyüme",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "fiyatlama_gucu",
+      "ad": "Fiyatlama gücü (brüt marj)",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "kazanc_kalitesi",
+      "ad": "Kâr nakde dönüşüyor mu",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "x",
+      "tip": "metrik"
+     },
+     {
+      "id": "stok_disiplini",
+      "ad": "Stok ve kanal disiplini",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "puan",
+      "tip": "metrik"
+     },
+     {
+      "id": "rekabet_musteri",
+      "ad": "Rekabet ve müşteri yoğunlaşması",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": null,
+      "tip": "yorum"
+     }
+    ],
+    "cikis_tetiklenen": []
+   },
+   "kural": {
+    "durum": "veri_yok",
+    "mesaj": null,
+    "tetiklenen": null,
+    "zirveden_uzaklik": null,
+    "dusus_kaynagi": null,
+    "dusus_kaynagi_aciklama": null,
+    "kosul_saglaniyor": null
+   },
+   "insider_hafta": {
+    "kodlar": {},
+    "islem": 0
+   },
+   "insider_uyarilar": [],
+   "yeni_bilanco": null,
+   "gelismeler": [],
+   "radar": [],
+   "sinyaller": []
+  },
+  {
+   "ticker": "META",
+   "ad": "Meta Platforms",
+   "fiyat": {
+    "veri_yok": true
+   },
+   "haftalik_degisim": null,
+   "benchmark_haftalik": {
+    "QQQ": null,
+    "XLC": null
+   },
+   "tez": {
+    "genel": "veri_yok",
+    "onay": "taslak",
+    "sutunlar": [
+     {
+      "id": "reklam_buyumesi",
+      "ad": "Reklam motoru büyümesi",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "marj",
+      "ad": "Faaliyet marjı",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "capex_nakit",
+      "ad": "AI yatırımına rağmen nakit üretimi",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "sulandirma",
+      "ad": "Hisse sayısı (geri alım vs SBC)",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "ai_getirisi",
+      "ad": "AI yatırımının getirisi ve regülasyon",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": null,
+      "tip": "yorum"
+     }
+    ],
+    "cikis_tetiklenen": []
+   },
+   "kural": {
+    "durum": "veri_yok",
+    "mesaj": null,
+    "tetiklenen": null,
+    "zirveden_uzaklik": null,
+    "dusus_kaynagi": null,
+    "dusus_kaynagi_aciklama": null,
+    "kosul_saglaniyor": null
+   },
+   "insider_hafta": {
+    "kodlar": {},
+    "islem": 0
+   },
+   "insider_uyarilar": [],
+   "yeni_bilanco": null,
+   "gelismeler": [],
+   "radar": [],
+   "sinyaller": []
+  },
+  {
+   "ticker": "NOW",
+   "ad": "ServiceNow",
+   "fiyat": {
+    "veri_yok": true
+   },
+   "haftalik_degisim": null,
+   "benchmark_haftalik": {
+    "QQQ": null,
+    "IGV": null
+   },
+   "tez": {
+    "genel": "veri_yok",
+    "onay": "taslak",
+    "sutunlar": [
+     {
+      "id": "buyume",
+      "ad": "Gelir büyümesi",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "gorunurluk",
+      "ad": "Sözleşmeli gelir birikimi (RPO)",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "nakit",
+      "ad": "Serbest nakit akışı marjı",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "sbc",
+      "ad": "SBC maliyeti",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "ai_ve_yenileme",
+      "ad": "AI monetizasyonu ve müşteri tutma",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": null,
+      "tip": "yorum"
+     }
+    ],
+    "cikis_tetiklenen": []
+   },
+   "kural": {
+    "durum": "veri_yok",
+    "mesaj": null,
+    "tetiklenen": null,
+    "zirveden_uzaklik": null,
+    "dusus_kaynagi": null,
+    "dusus_kaynagi_aciklama": null,
+    "kosul_saglaniyor": null
+   },
+   "insider_hafta": {
+    "kodlar": {},
+    "islem": 0
+   },
+   "insider_uyarilar": [],
+   "yeni_bilanco": null,
+   "gelismeler": [],
+   "radar": [],
+   "sinyaller": []
+  },
+  {
+   "ticker": "AAOI",
+   "ad": "Applied Optoelectronics",
+   "fiyat": {
+    "veri_yok": true
+   },
+   "haftalik_degisim": null,
+   "benchmark_haftalik": {
+    "QQQ": null,
+    "SMH": null
+   },
+   "tez": {
+    "genel": "veri_yok",
+    "onay": "taslak",
+    "sutunlar": [
+     {
+      "id": "buyume",
+      "ad": "Gelir büyümesi",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "brut_marj",
+      "ad": "Brüt marj",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "faaliyet_kari",
+      "ad": "Faaliyetten kârlılığa geçiş",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "sulandirma",
+      "ad": "Sulandırma",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "%",
+      "tip": "metrik"
+     },
+     {
+      "id": "stok",
+      "ad": "Stok ve talep uyumu",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": "puan",
+      "tip": "metrik"
+     },
+     {
+      "id": "musteri_kapasite",
+      "ad": "Müşteri yoğunlaşması ve kapasite",
+      "durum": "veri_yok",
+      "deger": null,
+      "birim": null,
+      "tip": "yorum"
+     }
+    ],
+    "cikis_tetiklenen": []
+   },
+   "kural": {
+    "durum": "veri_yok",
+    "mesaj": null,
+    "tetiklenen": null,
+    "zirveden_uzaklik": null,
+    "dusus_kaynagi": null,
+    "dusus_kaynagi_aciklama": null,
+    "kosul_saglaniyor": null
+   },
+   "insider_hafta": {
+    "kodlar": {},
+    "islem": 0
+   },
+   "insider_uyarilar": [],
+   "yeni_bilanco": null,
+   "gelismeler": [],
+   "radar": [],
+   "sinyaller": []
+  }
+ ],
+ "sinyaller": [],
+ "okuma": null
+}
