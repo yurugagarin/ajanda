@@ -9,7 +9,9 @@
   const q = new URLSearchParams(location.search).get('ui');
   if (q === 'mobile' || q === 'desktop' || q === 'auto') {
     try { localStorage.setItem('ajanda_ui', q); } catch (e) { }
-    history.replaceState(null, '', location.pathname);
+    /* yalnızca ui parametresini sil; telefon bağlantısı (gist, k) adreste kalsın */
+    const u = new URL(location.href); u.searchParams.delete('ui');
+    history.replaceState(null, '', u.pathname + u.search + u.hash);
   }
   let pref = 'auto';
   try { pref = localStorage.getItem('ajanda_ui') || 'auto'; } catch (e) { }

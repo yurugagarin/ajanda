@@ -644,7 +644,24 @@ var Store = (function () {
     } finally { syncing = false; }
   }
 
+  /* telefon bağlantısı: ?gist=...&k=... ile açılınca eşitleme bilgileri kendiliğinden girilir.
+     Bağlantı adres çubuğunda kalır; ana ekrana eklenen uygulama da aynı bağlantıyla açılır
+     (iPhone'da ana ekran uygulamasının hafızası Safari'den ayrıdır). */
+  function setupLink() {
+    const c = cfg();
+    if (!c.token || !c.gist) return '';
+    return location.origin + location.pathname + '?gist=' + encodeURIComponent(c.gist) + '&k=' + encodeURIComponent(c.token);
+  }
+  function applyLinkParams() {
+    const q = new URLSearchParams(location.search);
+    const gist = (q.get('gist') || '').trim(), tok = (q.get('k') || '').trim();
+    const c = cfg();
+    if (tok && gist && !c.token) setCfg({ token: tok, gist: gist });   /* bu cihazda kayıtlı ayar varsa ona dokunma */
+    else if (gist && c.token && !c.gist) setCfg({ gist: gist });
+  }
+
   function startAuto() {
+    applyLinkParams();
     if (cfg().token) setTimeout(() => sync(true), 400);
     document.addEventListener('visibilitychange', () => { if (!document.hidden && cfg().token) sync(true); });
     window.addEventListener('online', () => { if (cfg().token) sync(true); });
@@ -661,7 +678,7 @@ var Store = (function () {
     addEvent, addEvents, groupCount, deleteGroup, updateEvent, toggleDone, overdue, deleteEvent, updateCat, addCat, setCountdown,
     doneOn, toggleHabit, habitStreak, updateHabit, addHabit, deleteHabit,
     totals, exportJSON, importJSON, collapse, spanLabel, catUsage, eventsInCat, deleteCat, COLOR, groupDays, toICS, downloadICS, search, canUndo, undo,
-    cfg, setCfg, sync, createGist, startAuto,
+    cfg, setCfg, sync, createGist, startAuto, setupLink,
     get status() { return statusState; }
   };
 })();

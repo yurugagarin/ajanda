@@ -7,6 +7,13 @@ var DesktopView = (function () {
   const TILE_ALPHA = 0.58;   /* gün kutucuğu renk yoğunluğu: canlı .70 · soluk .45 */
   /* geçmiş günler: 'dark' = karartılmış · 'soft' = soluk/silik (ikisinde de kayıt rengi belli olur) */
   const PAST_STYLE = 'dark';
+  /* birden çok kategori: kutucuk her kategori için eşit dikey şeritlere bölünür */
+  function stripes(cols, a) {
+    cols = cols.slice(0, 4);
+    if (cols.length < 2) return `linear-gradient(${S.rgba(cols[0], a)},${S.rgba(cols[0], a)})`;
+    const st = 100 / cols.length;
+    return 'linear-gradient(90deg,' + cols.map((c, i) => `${S.rgba(c, a)} ${i * st}% ${(i + 1) * st}%`).join(',') + ')';
+  }
 
   const CSS = `
 body[data-ui="desktop"]{
@@ -256,20 +263,17 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         const allDone = isPast && evs.length && evs.every(e => e.done);
         if (isPast && PAST_STYLE === 'dark') {
           /* karartılmış: koyu zemin, kayıtlı günlerde kategori rengi hafifçe karışır */
-          bg = evs.length ? `linear-gradient(${S.rgba(colors[0], .42)},${S.rgba(colors[0], .42)}),#4a4136` : '#4a4136';
+          bg = evs.length ? stripes(colors, .42) + ',#4a4136' : '#4a4136';
           bc = evs.length ? S.rgba(colors[0], .6) : '#423a30'; numColor = evs.length ? '#f3ecdf' : '#9d907a';
-          dots = colors.slice(1, 4); dotShadow = 'box-shadow:0 0 0 1px rgba(74,65,54,.9);';
         } else if (isPast) {
           /* soluk: boş günler silik, kayıtlı günler kategori renginin açık tonunda */
-          bg = evs.length ? S.rgba(colors[0], .2) : 'transparent';
+          bg = evs.length ? stripes(colors, .2) : 'transparent';
           bc = evs.length ? S.rgba(colors[0], .32) : 'transparent';
           numColor = evs.length ? colors[0] : '#d6cab5';
-          dots = colors.slice(1, 4); dotShadow = 'opacity:.5;';
         } else if (evs.length) {
-          bg = S.rgba(colors[0], TILE_ALPHA);
+          bg = stripes(colors, TILE_ALPHA);
           bc = S.rgba(colors[0], .88);
           numColor = '#3a342c';
-          dots = colors.slice(1, 4);
         }
 
         const radius = '8px';
@@ -288,7 +292,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         const title = evs.map(e => (e.done ? '✓ ' : '') + (e.time ? e.time + ' ' : '') + e.text + ' (' + (cm[e.cat] || {}).name + ')').join(' · ');
         const fw = (isToday || evs.length) ? 700 : 500;
         const ff = evs.length ? "'Fraunces',Georgia,serif" : "'Karla',sans-serif";
-        const dc = evs.length ? ` data-c="${evs[0].cat}"` : '';
+        const dc = evs.length ? ` data-c="${evs.map(e => e.cat).join(' ')}"` : '';
         cells += `<div class="d-cell"${dc} onclick="DV.cell('${k}')" title="${S.esc(title)}" style="height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:${radius};cursor:pointer;background:${bg};border:${bw} solid ${bc};${extra}">
           <span style="font-size:12.5px;line-height:1;font-weight:${fw};color:${numColor};font-family:${ff}">${n}</span>
           <div style="display:flex;gap:2px;justify-content:center;height:5px;margin-top:1px">${dotsHtml}</div></div>`;
@@ -525,6 +529,11 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         <button onclick="DV.saveCfg()" style="margin-top:14px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:11px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">Kaydet ve eşitle</button>
         <div style="margin-top:10px;font-size:13px;color:#8a7355;text-align:center">${S.esc(st1.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
         ${c.gist ? `<div style="margin-top:14px;background:#f3ecdd;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#6b5f4d;word-break:break-all">Telefona girilecek Gist ID:<br><b>${S.esc(c.gist)}</b></div>` : ''}
+        ${S.setupLink() ? `<div style="margin-top:14px;border:1px solid #e2d7c1;border-radius:12px;padding:12px">
+          <div style="font-size:12.5px;font-weight:700;color:#8a7355;margin-bottom:6px">Telefon bağlantısı</div>
+          <div style="font-size:12.5px;color:#8a7f6f;line-height:1.5;margin-bottom:8px">Telefonda bu bağlantıyı açınca ajanda tüm kayıtlarınla gelir. Sonra Paylaş → Ana Ekrana Ekle. Bağlantıda şifren (token) var, kimseyle paylaşma.</div>
+          <div style="display:flex;gap:8px"><input id="cfgLink" readonly value="${S.escAttr(S.setupLink())}" class="d-in" style="flex:1;min-width:0;background:#fff;font-size:12px" onclick="this.select()">
+          <button class="d-btn" onclick="DV.copyLink()">Kopyala</button></div></div>` : ''}
       </div>`;
     }
 
@@ -578,7 +587,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
   function applyDim() {
     let el = document.getElementById('dDimStyle');
     if (!el) { el = document.createElement('style'); el.id = 'dDimStyle'; document.head.appendChild(el); }
-    el.textContent = V.filter ? `.d-app .d-cell[data-c]:not([data-c="${V.filter}"]){opacity:.14}` : '';
+    el.textContent = V.filter ? `.d-app .d-cell[data-c]:not([data-c~="${V.filter}"]){opacity:.14}` : '';
   }
   /* durum noktası — tam yeniden çizim yapmadan */
   function paintStatus() {
@@ -696,6 +705,12 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       V.tools = false; render(); toast(S.data.events.length + ' kayıt .ics olarak indirildi');
     },
     settings() { V.setOpen = !V.setOpen; render(); },
+    copyLink() {
+      const el = document.getElementById('cfgLink'); if (!el) return;
+      const done = () => toast('Bağlantı kopyalandı');
+      if (navigator.clipboard) navigator.clipboard.writeText(el.value).then(done, () => { el.select(); document.execCommand('copy'); done(); });
+      else { el.select(); document.execCommand('copy'); done(); }
+    },
     saveCfg() {
       S.setCfg({ token: document.getElementById('cfgTok').value.trim(), gist: document.getElementById('cfgGist').value.trim() });
       S.sync().then(() => render());

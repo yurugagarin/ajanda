@@ -199,6 +199,16 @@ body[data-ui="mobile"] #app{
   const TKEY = S.todayKey();
   const esc = S.esc;
 
+  /* bir günün farklı kategori renkleri (aynı kategori bir kez sayılır) */
+  const uniqCols = evs => { const seen = {}, out = []; evs.forEach(e => { if (!seen[e.color]) { seen[e.color] = 1; out.push(e.color); } }); return out; };
+  /* dilimli daire: her kategori eşit dilim; a verilirse soluk ton */
+  function pie(cols, a) {
+    const tint = c => a == null ? c : S.rgba(c, a);
+    if (cols.length < 2) return tint(cols[0]);
+    const st = 360 / cols.length;
+    return 'conic-gradient(' + cols.slice(0, 4).map((c, i) => `${tint(c)} ${i * st}deg ${(i + 1) * st}deg`).join(',') + ')';
+  }
+
   /* ---------------- veri köprüsü ---------------- */
   function dayEvents(y, m, d) {
     return S.eventsOn(iso(y, m, d)).map(e => Object.assign({}, e, { color: S.cat(e.cat).color }));
@@ -359,17 +369,18 @@ body[data-ui="mobile"] #app{
         const today = k === TKEY;
         const evs = dayEvents(V.y, m, d);
         let bg = 'transparent', color = 'rgba(27,26,24,.42)', w = 400, ring = '';
-        if (evs.length) { bg = evs[0].color; color = '#fff'; w = 700; }
+        const cols = uniqCols(evs);
+        if (evs.length) { bg = pie(cols); color = '#fff'; w = 700; }
         if (k < TKEY) {   /* geçmiş: soluk, ama kayıtlı günler renginden belli */
           color = 'rgba(27,26,24,.2)';
-          if (evs.length) { bg = S.rgba(evs[0].color, .26); color = evs[0].color; w = 600; }
+          if (evs.length) { bg = pie(cols, .26); color = cols[0]; w = 600; }
         }
         if (today) {
           color = '#fff'; w = 700;
-          bg = evs.length ? evs[0].color : GREEN;
+          bg = evs.length ? pie(cols) : GREEN;
           ring = `box-shadow:0 0 0 1.5px var(--paper),0 0 0 3.5px ${GREEN};position:relative;z-index:1;`;
         }
-        const dim = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
+        const dim = (V.hl && evs.length && !evs.some(e => e.cat === V.hl)) ? ' dim' : '';
         cells += `<div class="ycell${dim}" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>`;
       }
       el.innerHTML = `<div class="ymo-h">
@@ -458,22 +469,22 @@ body[data-ui="mobile"] #app{
         const today = k === TKEY;
         const evs = dayEvents(V.y, V.m, d);
         let bg = 'transparent', color = 'rgba(27,26,24,.85)', w = 500, ring = '';
-        let dotCols = evs.slice(1, 4).map(e => e.color);
-        if (evs.length) { bg = evs[0].color; color = '#fff'; w = 700; }
+        /* birden çok kategori: daire eşit dilimlere bölünür */
+        const cols = uniqCols(evs);
+        if (evs.length) { bg = pie(cols); color = '#fff'; w = 700; }
         const past = k < TKEY;
         if (past) {   /* geçmiş: soluk, ama kayıtlı günler renginden belli */
           color = 'rgba(27,26,24,.24)'; w = 500;
-          if (evs.length) { bg = S.rgba(evs[0].color, .24); color = evs[0].color; w = 700; }
+          if (evs.length) { bg = pie(cols, .24); color = cols[0]; w = 700; }
         }
         const allDone = past && evs.length && evs.every(e => e.done);
         if (today) {   /* bugün: boşluklu kalın yeşil halka */
           color = '#fff'; w = 700;
-          bg = evs.length ? evs[0].color : GREEN;
+          if (!evs.length) bg = GREEN;
           ring = `box-shadow:0 0 0 2.5px var(--paper),0 0 0 5px ${GREEN};`;
         }
-        const dimc = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
-        const dots = allDone ? '<div class="mtick">✓</div>'
-          : dotCols.map(c => `<div class="mdot" style="background:${c}${past ? ';opacity:.45' : ''}"></div>`).join('');
+        const dimc = (V.hl && evs.length && !evs.some(e => e.cat === V.hl)) ? ' dim' : '';
+        const dots = allDone ? '<div class="mtick">✓</div>' : '';
         return `<div class="mcell${dimc}">
           <div class="mnum" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>
           <div class="mdots">${dots}</div></div>`;
@@ -852,6 +863,8 @@ body[data-ui="mobile"] #app{
         </div>
         <button class="save" id="sSave" style="background:${GREEN}">Kaydet ve eşitle</button>
         <div class="note">${esc(st.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
+        ${S.setupLink() ? `<button class="ghost" id="sLink">Telefon bağlantısını kopyala</button>
+        <div class="note">Başka bir telefonda bu bağlantıyı açınca ajanda kayıtlarınla gelir. Bağlantıda şifren var, kimseyle paylaşma.</div>` : ''}
         <div class="lab">Kategoriler</div>
         <button class="ghost" id="sCats">Kategorileri düzenle</button>
         <div class="lab">Yedek</div>
@@ -865,6 +878,13 @@ body[data-ui="mobile"] #app{
         S.sync().then(ok => { toast(ok ? 'Eşitlendi' : S.status.text); draw(); });
       };
       box.querySelector('#sCats').onclick = () => { closeSheet(); openCats(); };
+      const lk = box.querySelector('#sLink');
+      if (lk) lk.onclick = () => {
+        const url = S.setupLink();
+        const fallback = () => { window.prompt('Bağlantıyı kopyala:', url); };
+        if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => toast('Bağlantı kopyalandı'), fallback);
+        else fallback();
+      };
       box.querySelector('#sIcs').onclick = () => { S.downloadICS(null, 'ajanda'); toast('.ics indirildi'); };
       box.querySelector('#sExp').onclick = () => S.exportJSON();
       box.querySelector('#sImp').onchange = function () {
