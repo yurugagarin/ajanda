@@ -187,16 +187,18 @@ body[data-ui="mobile"] #app{
 .mob .dtag{display:flex;align-items:baseline;gap:8px;margin:2px 2px 10px;font-size:13px;font-weight:700;color:var(--m5)}
 .mob .dtag b{color:var(--green)}
 .mob .dtag.past b{color:var(--m4)}
-.mob .cmp{background:var(--card);border-radius:20px;padding:4px 14px 14px;box-shadow:0 1px 2px rgba(0,0,0,.05),inset 0 0 0 1.5px rgba(47,122,91,.28)}
-.mob .cmp-in{width:100%;border:0;background:transparent;padding:13px 0 12px;font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--ink);outline:none}
-.mob .cmp-row{display:flex;align-items:center;gap:8px;border-top:1px solid var(--m2);padding-top:10px}
-.mob .cmp-cats{display:flex;gap:6px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.mob .cmp-cats::-webkit-scrollbar{display:none}
-.mob .cmp-cats button{flex:none;display:inline-flex;align-items:center;gap:6px;background:var(--m1);border-radius:999px;padding:8px 11px;font-size:13px;font-weight:600;color:var(--ink)}
-.mob .cmp-cats button i{width:9px;height:9px;border-radius:999px;display:block}
-.mob .cmp-cats button.on{background:var(--ink);color:var(--paper)}
-.mob .cmp .save{margin-top:12px;padding:14px}
-.mob .cmp .mini{width:104px;flex:none}
+/* Gün sekmesindeki form: kayıt penceresiyle aynı alanlar, ama sıkı — altta günün kayıtları görünsün */
+.mob .rform .field{margin-top:0}
+.mob .rform .inp{padding:12px 0}
+.mob .rform .lab{margin-top:12px}
+.mob .rform .cats{gap:6px;margin-top:8px}
+.mob .rform .cats button{padding:7px 11px;font-size:13px;gap:6px}
+.mob .rform .cats button i{width:8px;height:8px}
+.mob .rform .save{margin-top:12px;padding:13px}
+.mob .tlab{font-size:13px;font-weight:600;color:var(--m5);flex:none}
+.mob .frow #fTime{width:118px;flex:none}
+.mob .frow #fDate{min-width:0}
+.mob .tgl{text-align:left}
 .mob .note{margin-top:9px;text-align:center;font-size:11.5px;color:var(--m4);font-weight:500;line-height:1.45}
 `;
 
@@ -368,7 +370,7 @@ body[data-ui="mobile"] #app{
     sc.scrollTop = 0;
     if (V.level === 'gun' && V.compose) {   /* güne dokununca yazma kutusu hemen açılır */
       V.compose = false;
-      const inp = $('dIn'); if (inp) inp.focus();
+      const inp = document.querySelector('.rform #fTitle'); if (inp) inp.focus();
     }
   }
 
@@ -712,44 +714,15 @@ body[data-ui="mobile"] #app{
     const full = S.WD_FULL[dowMon(V.day)] + ' · ' + V.day.getFullYear();
     wrap.innerHTML = `<div class="dtag${k < TKEY ? ' past' : ''}">${rel ? `<b>${rel}</b>` : ''}<span>${full}</span></div>`;
 
-    /* yazma kutusu */
-    const cats = S.catUsage();
-    if (!cats.some(c => c.id === V.draft.cat)) V.draft.cat = cats[0] ? cats[0].id : 'genel';
-    const cmp = document.createElement('div'); cmp.className = 'cmp';
-    const color = S.cat(V.draft.cat).color;
-    cmp.innerHTML = `<input class="cmp-in" id="dIn" placeholder="${V.day.getDate()} ${MONTHS[V.day.getMonth()]} için ne yapacaksın?" enterkeyhint="done" autocomplete="off">
-      <div class="cmp-row">
-        <input class="mini tnum" id="dTime" type="time" value="${V.draft.time}" aria-label="Saat (isteğe bağlı)">
-        <div class="cmp-cats">${cats.map(c => `<button data-c="${c.id}" class="${c.id === V.draft.cat ? 'on' : ''}"><i style="background:${c.color}"></i>${esc(c.name)}</button>`).join('')}</div>
-      </div>
-      <button class="save" id="dAdd" style="background:${color}">Ekle</button>`;
-    const add = () => {
-      const inp = cmp.querySelector('#dIn'), text = inp.value.trim();
-      if (!text) { inp.focus(); toast('Önce ne yapacağını yaz'); return; }
-      V.draft.time = cmp.querySelector('#dTime').value || '';
-      S.addEvent({ date: k, time: V.draft.time, text: text, cat: V.draft.cat });
-      V.draft.time = ''; V.compose = true; V.anim = '';
-      render(); toast('Eklendi');
-    };
-    cmp.querySelector('#dAdd').onclick = add;
-    cmp.querySelector('#dIn').onkeydown = e => { if (e.key === 'Enter') add(); };
-    cmp.querySelectorAll('.cmp-cats button').forEach(b => b.onclick = () => {
-      const keep = cmp.querySelector('#dIn').value;
-      V.draft.cat = b.dataset.c; V.draft.time = cmp.querySelector('#dTime').value || '';
-      cmp.querySelectorAll('.cmp-cats button').forEach(x => x.classList.toggle('on', x === b));
-      cmp.querySelector('#dAdd').style.background = S.cat(V.draft.cat).color;
-      cmp.querySelector('#dIn').value = keep;
-    });
-    wrap.appendChild(cmp);
-    /* seçili kategori görünür kalsın */
-    requestAnimationFrame(() => { const bx = cmp.querySelector('.cmp-cats'), on = bx && bx.querySelector('.on'); if (on) bx.scrollLeft = on.offsetLeft - bx.offsetLeft - 8; });
+    /* yeni kayıt formu (kayıt penceresinin aynısı) */
+    wrap.appendChild(recordForm(null, k, true));
 
     /* günün kayıtları */
     const hd = document.createElement('div'); hd.className = 'agh';
-    hd.innerHTML = `<div class="t">Kayıtlar</div><div class="n">${evs.length ? evs.filter(e => e.done).length + '/' + evs.length + ' yapıldı' : ''}</div>`;
+    hd.innerHTML = `<div class="t">Bu günün kayıtları</div><div class="n">${evs.length ? evs.filter(e => e.done).length + '/' + evs.length + ' yapıldı' : ''}</div>`;
     wrap.appendChild(hd);
     const list = document.createElement('div'); list.className = 'prev';
-    if (!evs.length) list.innerHTML = '<div class="empty">Bu gün boş. Yukarıya yazıp Ekle\'ye bas.</div>';
+    if (!evs.length) list.innerHTML = '<div class="empty">Bu gün boş.</div>';
     evs.forEach(e => list.appendChild(agendaCard(e, e.time || 'gün boyu')));
     wrap.appendChild(list);
     return wrap;
@@ -860,32 +833,37 @@ body[data-ui="mobile"] #app{
     clearTimeout(toastT);
     toastT = setTimeout(() => host.innerHTML = '', undo ? 6000 : 1900);
   }
-  /* ---------------- kayıt sheet'i ---------------- */
-  function openSheet(ev, date) {
+  /* ---------------- kayıt formu ----------------
+     Aynı form iki yerde: kayıt penceresi (düzenle / yeni) ve Gün sekmesi.
+     inline: Gün sekmesinde sayfanın içinde durur; kaydedince boşalır, yeni kayda hazır olur. */
+  function recordForm(ev, date, inline) {
     const editing = !!ev;
     const cats = S.catUsage();
-    let dr = {
+    const dr = {
       title: ev ? ev.text : '',
       note: ev ? (ev.note || '') : '',
       date: ev ? ev.date : date,
-      time: ev ? (ev.time || '10:00') : '10:00',
-      cat: ev ? ev.cat : 'genel',
+      time: ev ? (ev.time || '') : '10:00',
+      cat: ev ? ev.cat : (inline && V.draft.cat) || 'genel',
       done: ev ? !!ev.done : false
     };
     const box = document.createElement('div');
+    if (inline) box.className = 'rform';
     const draw = () => {
       const color = S.cat(dr.cat).color;
       box.innerHTML = `
-      <div class="grab"></div>
-      <div class="sh-h"><div class="sh-t">${editing ? 'Kaydı düzenle' : 'Yeni kayıt'}</div><button class="sh-x">Vazgeç</button></div>
+      ${inline ? ''
+        : `<div class="grab"></div>
+      <div class="sh-h"><div class="sh-t">${editing ? 'Kaydı düzenle' : 'Yeni kayıt'}</div><button class="sh-x">Vazgeç</button></div>`}
       <div class="field">
-        <input class="inp" id="fTitle" placeholder="Ne yapacaksın?" value="${S.escAttr(dr.title)}">
+        <input class="inp" id="fTitle" placeholder="Ne yapacaksın?" value="${S.escAttr(dr.title)}" enterkeyhint="next">
         <div class="div"></div>
         <input class="inp" id="fNote" placeholder="Not (isteğe bağlı)" value="${S.escAttr(dr.note)}" style="font-size:15px;font-weight:500;color:var(--m6);padding:12px 0">
         <div class="div"></div>
         <div class="frow">
           <input type="date" class="flab" id="fDate" value="${dr.date}" style="border:0;background:transparent;outline:none;font-weight:600">
-          <input class="mini tnum" id="fTime" type="time" value="${dr.time}">
+          <span class="tlab">Saat</span>
+          <input class="mini tnum" id="fTime" type="time" value="${dr.time}" aria-label="Saat">
         </div>
       </div>
       ${editing ? `<button class="tgl" id="fDone"><span class="chk${dr.done ? ' on' : ''}">${SVG.check}</span>${dr.done ? 'Yapıldı' : 'Yapılmadı — işaretlemek için dokun'}</button>` : ''}
@@ -895,9 +873,9 @@ body[data-ui="mobile"] #app{
       <button class="save" id="fSave" style="background:${color}">Kaydet</button>
       ${editing ? '<button class="del" id="fDel">Bu günü sil</button>' : ''}
       ${editing && ev.gid && S.groupCount(ev.gid) > 1 ? `<button class="del" id="fDelG">Serinin tümünü sil (${S.groupCount(ev.gid)} gün)</button>` : ''}
-      <div class="note">Yıl görünümünde o gün bu kategorinin rengiyle işaretlenir</div>`;
+      ${inline ? '' : '<div class="note">Yıl görünümünde o gün bu kategorinin rengiyle işaretlenir</div>'}`;
 
-      box.querySelector('.sh-x').onclick = closeSheet;
+      const x = box.querySelector('.sh-x'); if (x) x.onclick = closeSheet;
       const grab = () => {
         dr.title = box.querySelector('#fTitle').value;
         dr.note = box.querySelector('#fNote').value;
@@ -905,9 +883,10 @@ body[data-ui="mobile"] #app{
         dr.time = box.querySelector('#fTime').value || '';
       };
       box.querySelector('#fCats').querySelectorAll('button').forEach(b => {
-        b.onclick = () => { grab(); dr.cat = b.dataset.c; draw(); };
+        b.onclick = () => { grab(); dr.cat = b.dataset.c; if (inline) V.draft.cat = dr.cat; draw(); };
       });
       box.querySelector('#fSave').onclick = () => { grab(); commit(); };
+      box.querySelector('#fTitle').onkeydown = e => { if (e.key === 'Enter') box.querySelector('#fNote').focus(); };
       const dn = box.querySelector('#fDone');
       if (dn) dn.onclick = () => { grab(); dr.done = !dr.done; draw(); };
       const del = box.querySelector('#fDel');
@@ -918,18 +897,28 @@ body[data-ui="mobile"] #app{
       };
     };
     const commit = () => {
+      if (inline && !dr.title.trim()) { box.querySelector('#fTitle').focus(); toast('Önce ne yapacağını yaz'); return; }
       if (!dr.title.trim()) dr.title = 'Yeni kayıt';
       const payload = { date: dr.date, time: dr.time, text: dr.title.trim(), note: (dr.note || '').trim(), cat: dr.cat, done: !!dr.done };
       if (editing) S.updateEvent(ev.id, payload); else S.addEvent(payload);
-      closeSheet();
+      if (!inline) closeSheet();
       const dt = parseISO(dr.date);
       V.y = dt.getFullYear();
-      if (V.level === 'hafta') V.week = startOfWeek(dt); else V.m = dt.getMonth();
+      if (V.level === 'hafta') V.week = startOfWeek(dt);
+      else if (V.level === 'gun') V.day = dt;
+      else V.m = dt.getMonth();
+      if (inline) { V.compose = true; V.anim = ''; }
       render(); toast(editing ? 'Güncellendi' : 'Eklendi');
     };
     draw();
+    return box;
+  }
+
+  /* ---------------- kayıt penceresi ---------------- */
+  function openSheet(ev, date) {
+    const box = recordForm(ev, date, false);
     sheet(box);
-    setTimeout(() => { const t = box.querySelector('#fTitle'); if (t && !editing) t.focus(); }, 280);
+    setTimeout(() => { const t = box.querySelector('#fTitle'); if (t && !ev) t.focus(); }, 280);
   }
 
   /* ---------------- yıl / ay seçici ---------------- */
@@ -1118,6 +1107,8 @@ body[data-ui="mobile"] #app{
     let sx = 0, sy = 0, sw = false;
     sc.addEventListener('touchstart', e => {
       if (e.touches.length !== 1) return;
+      /* formda ya da kaydırılabilir alanda parmak hareketi sayfayı değiştirmesin */
+      if (e.target.closest && e.target.closest('input,textarea,select,.rform,.cats,.legend')) { sw = false; return; }
       sx = e.touches[0].clientX; sy = e.touches[0].clientY; sw = true;
     }, { passive: true });
     sc.addEventListener('touchend', e => {
