@@ -6,7 +6,7 @@
 var Store = (function () {
 
   /* sürüm: her güncellemede index.html'deki ?v= ile birlikte artırın — sağ üstte görünür */
-  const VERSION = '11', VERSION_DATE = '1 Eki 2026';
+  const VERSION = '12', VERSION_DATE = '1 Eki 2026';
   const LS_DATA = 'ajanda_data_v3';
   const LS_CFG = 'ajanda_cfg_v1';
   const OLD_KEYS = ['ajanda_2026_v1', 'ajanda_2027_v1', 'ajanda_2028_v1'];
@@ -654,6 +654,21 @@ var Store = (function () {
     if (!c.token || !c.gist) return '';
     return location.origin + location.pathname + '?gist=' + encodeURIComponent(c.gist) + '&k=' + encodeURIComponent(c.token);
   }
+  /* yapıştırılan telefon bağlantısından (ya da token + Gist ID metninden) ayarları çıkar */
+  function parseLink(text) {
+    const t = String(text || '').trim();
+    let gist = '', tok = '';
+    try { const u = new URL(t); gist = u.searchParams.get('gist') || ''; tok = u.searchParams.get('k') || ''; } catch (e) { }
+    if (!tok) { const m = t.match(/(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|gho_[A-Za-z0-9]{20,})/); if (m) tok = m[1]; }
+    if (!gist) { const m = t.replace(/(ghp_|github_pat_|gho_)[A-Za-z0-9_]+/g, ' ').match(/\b([0-9a-f]{20,40})\b/i); if (m) gist = m[1]; }
+    return tok && gist ? { token: tok.trim(), gist: gist.trim() } : null;
+  }
+  function connectFromText(text) {
+    const r = parseLink(text);
+    if (!r) return Promise.resolve(false);
+    setCfg({ token: r.token, gist: r.gist });
+    return sync();
+  }
   function applyLinkParams() {
     const q = new URLSearchParams(location.search);
     const gist = (q.get('gist') || '').trim(), tok = (q.get('k') || '').trim();
@@ -680,7 +695,7 @@ var Store = (function () {
     addEvent, addEvents, groupCount, deleteGroup, updateEvent, toggleDone, overdue, deleteEvent, updateCat, addCat, setCountdown,
     doneOn, toggleHabit, habitStreak, updateHabit, addHabit, deleteHabit,
     totals, exportJSON, importJSON, collapse, spanLabel, catUsage, eventsInCat, deleteCat, COLOR, groupDays, toICS, downloadICS, search, canUndo, undo,
-    cfg, setCfg, sync, createGist, startAuto, setupLink,
+    cfg, setCfg, sync, createGist, startAuto, setupLink, parseLink, connectFromText,
     get status() { return statusState; }
   };
 })();
