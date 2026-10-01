@@ -272,9 +272,14 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
           dots = colors.slice(1, 4);
         }
 
-        const radius = '8px', extra = '';
+        const radius = '8px';
+        let extra = '';
         let bw = '1px';
-        if (isToday) { bc = '#b5552e'; bw = '1.5px'; if (!evs.length && !isPast) { bg = '#fbeede'; numColor = '#b5552e'; } }
+        if (isToday) {   /* bugün: kalın çerçeve + hafif parlama */
+          bc = '#b5552e'; bw = '2.5px';
+          extra = 'box-shadow:0 0 0 3px rgba(181,85,46,.28),0 4px 10px rgba(181,85,46,.25);position:relative;z-index:1;';
+          if (!evs.length && !isPast) { bg = '#fbeede'; numColor = '#b5552e'; }
+        }
         if (isTarget) { bc = '#e3a23f'; bw = '1.5px'; }
         if (isPicked) { bc = '#3a342c'; bw = '2px'; if (!evs.length && !isPast) bg = '#efe4cd'; }
 

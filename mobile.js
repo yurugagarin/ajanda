@@ -68,7 +68,7 @@ body[data-ui="mobile"] #app{
 .mob .dows div{text-align:center;font-size:10px;font-weight:600;color:rgba(27,26,24,.35)}
 .mob .mrows{display:flex;flex-direction:column;gap:2px}
 .mob .mrow{display:grid;grid-template-columns:repeat(7,1fr);border-radius:14px;padding:4px 2px;cursor:pointer}
-.mob .mcell{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0}
+.mob .mcell{display:flex;flex-direction:column;align-items:center;gap:7px;padding:4px 0}
 .mob .mnum{width:26px;height:26px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:14px}
 .mob .mdots{height:4px;display:flex;gap:2px}
 .mob .mdot{width:4px;height:4px;border-radius:999px}
@@ -366,8 +366,8 @@ body[data-ui="mobile"] #app{
         }
         if (today) {
           color = '#fff'; w = 700;
-          bg = evs.length ? evs[0].color : INK;
-          if (evs.length) ring = 'box-shadow:inset 0 0 0 1.5px ' + INK + ';';
+          bg = evs.length ? evs[0].color : GREEN;
+          ring = `box-shadow:0 0 0 1.5px var(--paper),0 0 0 3.5px ${GREEN};position:relative;z-index:1;`;
         }
         const dim = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
         cells += `<div class="ycell${dim}" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>`;
@@ -451,7 +451,7 @@ body[data-ui="mobile"] #app{
       const hasToday = isCur && slice.indexOf(TODAY.getDate()) >= 0;
       const row = document.createElement('div');
       row.className = 'mrow';
-      row.style.background = 'transparent';
+      row.style.background = hasToday ? 'rgba(47,122,91,.10)' : 'transparent';   /* bugünün haftası */
       row.innerHTML = slice.map(d => {
         if (!d) return '<div class="mcell"></div>';
         const k = iso(V.y, V.m, d);
@@ -466,10 +466,10 @@ body[data-ui="mobile"] #app{
           if (evs.length) { bg = S.rgba(evs[0].color, .24); color = evs[0].color; w = 700; }
         }
         const allDone = past && evs.length && evs.every(e => e.done);
-        if (today) {
+        if (today) {   /* bugün: boşluklu kalın yeşil halka */
           color = '#fff'; w = 700;
           bg = evs.length ? evs[0].color : GREEN;
-          if (evs.length) ring = `box-shadow:inset 0 0 0 2px ${GREEN};`;
+          ring = `box-shadow:0 0 0 2.5px var(--paper),0 0 0 5px ${GREEN};`;
         }
         const dimc = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
         const dots = allDone ? '<div class="mtick">✓</div>'
