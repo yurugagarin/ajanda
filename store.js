@@ -5,6 +5,8 @@
    =========================================================== */
 var Store = (function () {
 
+  /* sürüm: her güncellemede index.html'deki ?v= ile birlikte artırın — sağ üstte görünür */
+  const VERSION = '11', VERSION_DATE = '1 Eki 2026';
   const LS_DATA = 'ajanda_data_v3';
   const LS_CFG = 'ajanda_cfg_v1';
   const OLD_KEYS = ['ajanda_2026_v1', 'ajanda_2027_v1', 'ajanda_2028_v1'];
@@ -670,7 +672,7 @@ var Store = (function () {
 
   /* ---------- dışa açılan arayüz ---------- */
   return {
-    PALETTE, MONTHS, MONTHS_SHORT, WD_FULL, WD_SHORT, WD_MINI, ICONS, DEFAULT_HABITS,
+    VERSION, VERSION_DATE, PALETTE, MONTHS, MONTHS_SHORT, WD_FULL, WD_SHORT, WD_MINI, ICONS, DEFAULT_HABITS,
     get data() { return D; },
     on, emit, commit, persist,
     dkey, todayKey, shiftKey, parseKey, weekday, esc, escAttr, rgba, money, uid, pad,

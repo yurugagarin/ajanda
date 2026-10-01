@@ -28,7 +28,8 @@ body[data-ui="mobile"] #app{
 .mob input,.mob select,.mob textarea{font-family:inherit}
 .mob .tnum{font-variant-numeric:tabular-nums}
 
-.mob .hdr{padding:calc(20px + var(--safeT)) 20px 8px;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex:none}
+.mob .ver{position:absolute;top:calc(5px + var(--safeT));right:20px;font-size:9.5px;font-weight:600;color:var(--m3);letter-spacing:.02em;pointer-events:none}
+.mob .hdr{position:relative;padding:calc(20px + var(--safeT)) 20px 8px;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex:none}
 .mob .kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--m4);font-weight:600;display:flex;align-items:center;gap:6px}
 .mob .kicker i{width:6px;height:6px;border-radius:999px;display:block}
 .mob .title{font-size:30px;font-weight:700;letter-spacing:-.02em;margin-top:3px;line-height:1.05;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;max-width:100%}
@@ -244,6 +245,7 @@ body[data-ui="mobile"] #app{
     app.className = 'mob';
     app.innerHTML = `
       <div class="hdr">
+        <div class="ver">Sürüm ${S.VERSION} · ${S.VERSION_DATE}</div>
         <div style="flex:1;min-width:0">
           <div class="kicker" id="mKicker"></div>
           <button class="title" id="mTitle"></button>

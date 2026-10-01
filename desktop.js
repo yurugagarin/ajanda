@@ -23,7 +23,8 @@ body[data-ui="desktop"]{
 .d-app *,.d-drawer *,.d-modal *{box-sizing:border-box}
 .d-app{min-height:100vh;background:radial-gradient(140% 100% at 50% 0%,#f1eadd 0%,#ece4d6 55%,#e4dac8 100%);padding:26px 32px 44px}
 .fr{font-family:'Fraunces',Georgia,serif}
-.d-wrap{max-width:1340px;margin:0 auto}
+.d-wrap{max-width:1340px;margin:0 auto;position:relative}
+.d-ver{position:absolute;top:-19px;right:2px;font-size:11px;font-weight:600;color:var(--mut);letter-spacing:.02em}
 @keyframes drawerIn{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes toastIn{from{transform:translate(-50%,14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus-visible,body[data-ui="desktop"] textarea:focus-visible,body[data-ui="desktop"] select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
@@ -503,6 +504,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
           <button class="d-btn" style="padding:12px;text-align:left" onclick="Store.sync()">Şimdi eşitle <span style="color:#a8987c;font-weight:600">· ${S.esc(st0.text)}</span></button>
           <button class="d-btn" style="padding:12px;text-align:left" onclick="DV.catEditToggle()">Kategorileri düzenle</button>
           <button class="d-btn" style="padding:12px;text-align:left" onclick="DV.settings()">Senkron ayarları (token / Gist)</button>
+          <button class="d-btn" style="padding:12px;text-align:left" onclick="DV.phoneLink()">Telefon bağlantısını kopyala <span style="color:#a8987c;font-weight:600">· telefonda açınca kayıtlarla gelir</span></button>
           <button class="d-btn" style="padding:12px;text-align:left" onclick="DV.ics()">Takvime aktar — ${Y} (.ics)</button>
           <button class="d-btn" style="padding:12px;text-align:left" onclick="DV.icsAll()">Takvime aktar — tüm kayıtlar (.ics)</button>
           <button class="d-btn" style="padding:12px;text-align:left" onclick="Store.exportJSON()">Yedek indir (.json)</button>
@@ -541,6 +543,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
 
     document.getElementById('app').innerHTML = `
     <div class="d-app"><div class="d-wrap">
+      <div class="d-ver">Sürüm ${S.VERSION} · ${S.VERSION_DATE}</div>
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:16px">
         <div><div style="font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--mut);font-weight:700">Kişisel Ajanda</div>
           <button onclick="DV.yearPick()" class="fr" style="display:flex;align-items:center;gap:8px;background:none;border:none;padding:0;margin-top:2px;font-size:40px;line-height:1;font-weight:600;color:var(--ink);cursor:pointer;font-family:'Fraunces',Georgia,serif">
@@ -705,6 +708,13 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       V.tools = false; render(); toast(S.data.events.length + ' kayıt .ics olarak indirildi');
     },
     settings() { V.setOpen = !V.setOpen; render(); },
+    phoneLink() {
+      const url = S.setupLink();
+      if (!url) { V.tools = false; V.setOpen = true; render(); toast('Önce token ve Gist ID girip kaydedin'); return; }
+      const done = () => { V.tools = false; render(); toast('Telefon bağlantısı kopyalandı — kimseyle paylaşma'); };
+      const manual = () => { V.tools = false; V.setOpen = true; render(); const el = document.getElementById('cfgLink'); if (el) el.select(); toast('Bağlantı seçildi — Ctrl+C ile kopyala'); };
+      if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, manual); else manual();
+    },
     copyLink() {
       const el = document.getElementById('cfgLink'); if (!el) return;
       const done = () => toast('Bağlantı kopyalandı');
