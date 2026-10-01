@@ -175,6 +175,14 @@ body[data-ui="mobile"] #app{
 .mob .wday.today .wright{background:rgba(47,122,91,.08);border-radius:16px;padding:8px;border-bottom:0;margin-bottom:6px}
 .mob .mtick{font-size:8px;line-height:4px;font-weight:900;color:var(--green)}
 .mob .tgl{margin-top:12px;display:flex;align-items:center;gap:12px;background:var(--card);border-radius:16px;padding:12px 14px;width:100%;font-size:15px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.mob .conn{margin:2px 0 16px;background:var(--card);border-radius:18px;padding:14px 14px 12px;box-shadow:0 1px 2px rgba(0,0,0,.05),inset 0 0 0 1.5px rgba(47,122,91,.35)}
+.mob .conn b{display:block;font-size:14.5px;font-weight:700;letter-spacing:-.01em}
+.mob .conn p{margin:4px 0 10px;font-size:12.5px;line-height:1.45;color:var(--m5)}
+.mob .conn input{width:100%;border:0;border-radius:12px;background:var(--m1);padding:11px 12px;font-size:14px;color:var(--ink);outline:none}
+.mob .conn .row{display:flex;gap:8px;margin-top:8px}
+.mob .conn .row button{flex:1;padding:11px;border-radius:12px;font-size:13.5px;font-weight:700;background:var(--m1);color:var(--m6)}
+.mob .conn .row button.go{background:var(--green);color:#fff}
+.mob .conn .x{display:block;margin:8px auto 0;font-size:12px;font-weight:600;color:var(--m4)}
 .mob .note{margin-top:9px;text-align:center;font-size:11.5px;color:var(--m4);font-weight:500;line-height:1.45}
 `;
 
@@ -448,9 +456,38 @@ body[data-ui="mobile"] #app{
     return box;
   }
 
+  /* ---------------- eşitleme yoksa: bağlantıyı yapıştır kartı ----------------
+     iPhone'da ana ekrana eklenen uygulamanın hafızası Safari'den ayrıdır;
+     ayar yoksa kayıtlar gelmez. Bu kartla bağlantı uygulamanın içine yapıştırılır. */
+  function connectCard() {
+    if (S.cfg().token) return null;
+    try { if (localStorage.getItem('ajanda_conn_hide') === '1' && S.data.events.length) return null; } catch (e) { }
+    const box = document.createElement('div'); box.className = 'conn';
+    box.innerHTML = `<b>Kayıtların bu telefonda görünmüyor mu?</b>
+      <p>Bilgisayarda Araçlar → <b style="display:inline;font-size:inherit">Telefon bağlantısını kopyala</b> de, bağlantıyı buraya yapıştır.</p>
+      <input id="cIn" placeholder="Bağlantıyı yapıştır" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="row"><button id="cPaste">Panodan yapıştır</button><button class="go" id="cGo">Bağlan</button></div>
+      <button class="x" id="cHide">Gizle</button>`;
+    const go = text => {
+      if (!S.parseLink(text)) { toast('Bağlantı tanınmadı'); return; }
+      toast('Bağlanıyor…');
+      S.connectFromText(text).then(ok => { render(); toast(ok ? 'Kayıtlar geldi ✓' : (S.status.text || 'Bağlanamadı')); });
+    };
+    box.querySelector('#cGo').onclick = () => go(box.querySelector('#cIn').value);
+    box.querySelector('#cIn').onkeydown = e => { if (e.key === 'Enter') go(e.target.value); };
+    box.querySelector('#cPaste').onclick = () => {
+      if (!navigator.clipboard || !navigator.clipboard.readText) { box.querySelector('#cIn').focus(); toast('Kutuya basılı tutup Yapıştır de'); return; }
+      navigator.clipboard.readText().then(t => { box.querySelector('#cIn').value = t; go(t); },
+        () => { box.querySelector('#cIn').focus(); toast('Kutuya basılı tutup Yapıştır de'); });
+    };
+    box.querySelector('#cHide').onclick = () => { try { localStorage.setItem('ajanda_conn_hide', '1'); } catch (e) { } box.remove(); };
+    return box;
+  }
+
   /* ---------------- ay ---------------- */
   function viewMonth() {
     const frag = document.createDocumentFragment();
+    const cc = connectCard(); if (cc) frag.appendChild(cc);
     const box = document.createElement('div'); box.className = V.anim;
     box.innerHTML = `<div class="dows">${DOW.map(d => `<div>${d}</div>`).join('')}</div><div class="mrows"></div>`;
     const rows = box.querySelector('.mrows');
@@ -864,6 +901,7 @@ body[data-ui="mobile"] #app{
           <input class="inp" id="sGist" autocomplete="off" placeholder="Gist ID" value="${S.escAttr(c.gist)}">
         </div>
         <button class="save" id="sSave" style="background:${GREEN}">Kaydet ve eşitle</button>
+        <div class="field" style="margin-top:10px"><input class="inp" id="sLinkIn" placeholder="…ya da telefon bağlantısını yapıştır" autocomplete="off" autocapitalize="off" spellcheck="false" style="font-size:15px"></div>
         <div class="note">${esc(st.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
         ${S.setupLink() ? `<button class="ghost" id="sLink">Telefon bağlantısını kopyala</button>
         <div class="note">Başka bir telefonda bu bağlantıyı açınca ajanda kayıtlarınla gelir. Bağlantıda şifren var, kimseyle paylaşma.</div>` : ''}
@@ -875,6 +913,10 @@ body[data-ui="mobile"] #app{
         <label class="ghost" style="cursor:pointer">Yedek yükle<input type="file" accept="application/json" id="sImp" style="display:none"></label>
         <div class="note">Kayıtlar telefonda saklanır; GitHub üzerinden bilgisayarla eşitlenir.</div>`;
       box.querySelector('.sh-x').onclick = closeSheet;
+      box.querySelector('#sLinkIn').onchange = function () {
+        if (!S.parseLink(this.value)) { toast('Bağlantı tanınmadı'); return; }
+        S.connectFromText(this.value).then(ok => { toast(ok ? 'Kayıtlar geldi ✓' : S.status.text); draw(); render(); });
+      };
       box.querySelector('#sSave').onclick = () => {
         S.setCfg({ token: box.querySelector('#sTok').value.trim(), gist: box.querySelector('#sGist').value.trim() });
         S.sync().then(ok => { toast(ok ? 'Eşitlendi' : S.status.text); draw(); });
