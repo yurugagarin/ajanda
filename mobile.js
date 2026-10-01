@@ -32,7 +32,8 @@ body[data-ui="mobile"] #app{
 .mob .kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--m4);font-weight:600;display:flex;align-items:center;gap:6px}
 .mob .kicker i{width:6px;height:6px;border-radius:999px;display:block}
 .mob .title{font-size:30px;font-weight:700;letter-spacing:-.02em;margin-top:3px;line-height:1.05;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;max-width:100%}
-.mob .title.sm{font-size:23px}
+.mob .title.sm{font-size:20px;letter-spacing:-.025em}
+.mob .title{text-overflow:ellipsis}
 .mob .title .chev{font-size:15px;font-weight:700;color:var(--m3);transform:translateY(1px)}
 .mob button.title:active{opacity:.55}
 .mob .hbtns{display:flex;gap:8px;align-items:center;flex:none}
@@ -148,12 +149,38 @@ body[data-ui="mobile"] #app{
 .mob .yhead svg{width:15px;height:15px}
 .mob .save{margin-top:22px;padding:16px;border-radius:18px;text-align:center;font-size:15px;font-weight:700;color:#fff;width:100%}
 .mob .del{margin-top:9px;padding:13px;border-radius:16px;text-align:center;font-size:13px;font-weight:600;color:var(--rust);width:100%;background:rgba(180,98,47,.09)}
+.mob .chk{width:24px;height:24px;border-radius:999px;flex:none;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px rgba(27,26,24,.2);color:#fff;transition:background .15s}
+.mob .chk svg{width:13px;height:13px;opacity:0}
+.mob .chk.on{background:var(--green);box-shadow:none}
+.mob .chk.on svg{opacity:1}
+.mob .chk.miss{box-shadow:inset 0 0 0 2px rgba(180,98,47,.65)}
+.mob .is-done .pttl,.mob .is-done .ev-n{text-decoration:line-through;text-decoration-color:rgba(27,26,24,.35);color:var(--m5)}
+.mob .is-done .pbar,.mob .is-done .ev-c{opacity:.45}
+.mob .pbody{flex:1;min-width:0;text-align:left;display:flex;align-items:center;gap:12px}
+.mob .agh{display:flex;align-items:baseline;gap:8px;margin-top:22px;padding:0 2px}
+.mob .agh .t{font-size:14px;font-weight:800;letter-spacing:-.01em}
+.mob .agh .d{font-size:12px;font-weight:600;color:var(--m4)}
+.mob .agh .n{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--m4)}
+.mob .agh .a{margin-left:auto;font-size:12px;font-weight:600;color:var(--green)}
+.mob .agh.miss .t{color:var(--rust)}
+.mob .tbox{margin-top:18px;background:rgba(47,122,91,.09);border-radius:22px;padding:12px 10px 10px;box-shadow:inset 0 0 0 1.5px rgba(47,122,91,.22)}
+.mob .tbox .agh{margin-top:0;padding:0 6px 2px}
+.mob .tbox .agh .t{color:var(--green)}
+.mob .tbox .prev{margin-top:8px}
+.mob .tbox .empty{padding:14px 4px}
+.mob .wtag{margin-top:5px;font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--green)}
+.mob .wday.past .wleft,.mob .wday.past .ev>button:not(.chk){opacity:.55}
+.mob .wday.past .ev{background:rgba(255,255,255,.55)}
+.mob .wday.today .wright{background:rgba(47,122,91,.08);border-radius:16px;padding:8px;border-bottom:0;margin-bottom:6px}
+.mob .mtick{font-size:8px;line-height:4px;font-weight:900;color:var(--green)}
+.mob .tgl{margin-top:12px;display:flex;align-items:center;gap:12px;background:var(--card);border-radius:16px;padding:12px 14px;width:100%;font-size:15px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .mob .note{margin-top:9px;text-align:center;font-size:11.5px;color:var(--m4);font-weight:500;line-height:1.45}
 `;
 
   const SVG = {
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
   };
 
@@ -207,7 +234,7 @@ body[data-ui="mobile"] #app{
     app.className = 'mob';
     app.innerHTML = `
       <div class="hdr">
-        <div style="min-width:0">
+        <div style="flex:1;min-width:0">
           <div class="kicker" id="mKicker"></div>
           <button class="title" id="mTitle"></button>
         </div>
@@ -243,6 +270,14 @@ body[data-ui="mobile"] #app{
     el.innerHTML = esc(text) + (onTap ? '<span class="chev">▾</span>' : '');
     el.onclick = onTap || null;
     el.style.cursor = onTap ? 'pointer' : 'default';
+    el.style.fontSize = '';
+  }
+  /* uzun başlık (ör. "28 Eyl – 4 Eki") dar ekranda sığana kadar küçülür */
+  function fitTitle() {
+    const el = $('mTitle'); if (!el) return;
+    el.style.fontSize = '';
+    let fs = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > el.clientWidth + 1 && fs > 13) { fs -= 1; el.style.fontSize = fs + 'px'; }
   }
   function navPair(fn) {
     $('mNav').innerHTML = `<button aria-label="Önceki">${SVG.left}</button><button aria-label="Sonraki">${SVG.right}</button>`;
@@ -266,14 +301,16 @@ body[data-ui="mobile"] #app{
 
     const wEnd = addDays(V.week, 6);
     const sameM = V.week.getMonth() === wEnd.getMonth();
+    /* kısa ay adı: başlık dar ekranda kesilmesin */
     const weekLabel = sameM
-      ? `${V.week.getDate()} – ${wEnd.getDate()} ${MONTHS[V.week.getMonth()]}`
+      ? `${V.week.getDate()}–${wEnd.getDate()} ${SHORT[V.week.getMonth()]}`
       : `${V.week.getDate()} ${SHORT[V.week.getMonth()]} – ${wEnd.getDate()} ${SHORT[wEnd.getMonth()]}`;
 
     if (V.level === 'yil') setTitle(String(V.y), openYearPick);
     else if (V.level === 'ay') setTitle(MONTHS[V.m], openMonthPick);
     else setTitle(weekLabel, null);
     $('mTitle').classList.toggle('sm', V.level === 'hafta');
+    fitTitle(); requestAnimationFrame(fitTitle);
     setKicker({
       yil: `Yıl · ${yearCount(V.y)} kayıt`,
       ay: `${V.y} · ${monthCount(V.y, V.m)} kayıt`,
@@ -313,7 +350,7 @@ body[data-ui="mobile"] #app{
     const todayD = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
     for (let m = 0; m < 12; m++) {
       const isCur = V.y === TODAY.getFullYear() && m === TODAY.getMonth();
-      const monthPast = false;
+      const monthPast = V.y < TODAY.getFullYear() || (V.y === TODAY.getFullYear() && m < TODAY.getMonth());
       const el = document.createElement('div'); el.className = 'ymo';
       let cells = '';
       for (let i = 0; i < firstDow(V.y, m); i++) cells += '<div class="ycell"></div>';
@@ -323,6 +360,10 @@ body[data-ui="mobile"] #app{
         const evs = dayEvents(V.y, m, d);
         let bg = 'transparent', color = 'rgba(27,26,24,.42)', w = 400, ring = '';
         if (evs.length) { bg = evs[0].color; color = '#fff'; w = 700; }
+        if (k < TKEY) {   /* geçmiş: soluk, ama kayıtlı günler renginden belli */
+          color = 'rgba(27,26,24,.2)';
+          if (evs.length) { bg = S.rgba(evs[0].color, .26); color = evs[0].color; w = 600; }
+        }
         if (today) {
           color = '#fff'; w = 700;
           bg = evs.length ? evs[0].color : INK;
@@ -369,12 +410,9 @@ body[data-ui="mobile"] #app{
     if (!items.length) list.innerHTML = `<div class="empty">${past ? 'Geçmişte kayıt yok.' : 'Yaklaşan kayıt yok.'}</div>`;
     items.forEach(it => {
       const e = it.ev, p = S.parseKey(it.first);
-      const b = document.createElement('button'); b.className = 'pcard';
-      b.style.opacity = it.last < TKEY ? '.55' : '1';
-      b.innerHTML = `<div class="pbar" style="background:${c.color}"></div>
-        <div style="flex:1;min-width:0"><div class="pttl">${esc(e.text)}</div>
-        <div class="pwhen">${S.spanLabel(it)}${it.contiguous && it.count > 1 ? ' · ' + it.count + ' gün' : ''} · ${p.y}${e.time ? ' · ' + e.time : ''}</div></div>`;
-      b.onclick = () => openSheet(e, e.date);
+      const b = agendaCard(Object.assign({}, e, { color: c.color }),
+        `${S.spanLabel(it)}${it.contiguous && it.count > 1 ? ' · ' + it.count + ' gün' : ''} · ${p.y}${e.time ? ' · ' + e.time : ''}`);
+      if (it.last < TKEY) b.style.opacity = '.6';
       list.appendChild(b);
     });
     box.appendChild(list);
@@ -420,15 +458,22 @@ body[data-ui="mobile"] #app{
         const today = k === TKEY;
         const evs = dayEvents(V.y, V.m, d);
         let bg = 'transparent', color = 'rgba(27,26,24,.85)', w = 500, ring = '';
-        const dotCols = evs.slice(1, 4).map(e => e.color);
+        let dotCols = evs.slice(1, 4).map(e => e.color);
         if (evs.length) { bg = evs[0].color; color = '#fff'; w = 700; }
+        const past = k < TKEY;
+        if (past) {   /* geçmiş: soluk, ama kayıtlı günler renginden belli */
+          color = 'rgba(27,26,24,.24)'; w = 500;
+          if (evs.length) { bg = S.rgba(evs[0].color, .24); color = evs[0].color; w = 700; }
+        }
+        const allDone = past && evs.length && evs.every(e => e.done);
         if (today) {
           color = '#fff'; w = 700;
           bg = evs.length ? evs[0].color : GREEN;
           if (evs.length) ring = `box-shadow:inset 0 0 0 2px ${GREEN};`;
         }
         const dimc = (V.hl && evs.length && evs[0].cat !== V.hl) ? ' dim' : '';
-        const dots = dotCols.map(c => `<div class="mdot" style="background:${c}"></div>`).join('');
+        const dots = allDone ? '<div class="mtick">✓</div>'
+          : dotCols.map(c => `<div class="mdot" style="background:${c}${past ? ';opacity:.45' : ''}"></div>`).join('');
         return `<div class="mcell${dimc}">
           <div class="mnum" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>
           <div class="mdots">${dots}</div></div>`;
@@ -441,43 +486,96 @@ body[data-ui="mobile"] #app{
 
     if (V.hl) { frag.appendChild(catListEl()); const lg0 = legendEl(); if (lg0) frag.appendChild(lg0); return frag; }
 
-    const up = upcoming(8);
-    const hd = h(`<div class="sechd"><div class="t">Yaklaşan</div><button class="a">Haftayı aç</button></div>`);
-    hd.querySelector('.a').onclick = () => { V.week = startOfWeek(TODAY); go('hafta', 'zin'); };
-    frag.appendChild(hd);
-    const list = document.createElement('div'); list.className = 'prev';
-    if (!up.length) {
-      list.innerHTML = '<div class="empty">Önümüzdeki 30 günde kayıt yok.<br>Sağ üstteki + ile ekle.</div>';
-    } else {
-      up.forEach(it => {
-        const e = it.ev, dt = parseISO(e.date);
-        let when;
-        if (it.count > 1) {
-          when = S.spanLabel(it);
-        } else {
-          when = sameDay(dt, TODAY) ? 'Bugün' : sameDay(dt, addDays(TODAY, 1)) ? 'Yarın'
-            : `${dt.getDate()} ${SHORT[dt.getMonth()]} ${DOW[dowMon(dt)]}`;
-        }
-        if (e.time) when += ' · ' + e.time;
-        const b = document.createElement('button'); b.className = 'pcard';
-        b.innerHTML = `<div class="pbar" style="background:${e.color}"></div>
-          <div style="flex:1;min-width:0"><div class="pttl">${esc(e.text)}</div><div class="pwhen">${when}</div></div>`;
-        b.onclick = () => openSheet(e, e.date);
-        list.appendChild(b);
-      });
-    }
-    frag.appendChild(list);
+    frag.appendChild(agendaEl());
     const lg = legendEl(); if (lg) frag.appendChild(lg);
     return frag;
   }
-  function upcoming(limit) {
-    const out = [];
-    for (let i = 0; i < 90; i++) {
-      const dt = addDays(TODAY, i);
-      dayEvents(dt.getFullYear(), dt.getMonth(), dt.getDate()).forEach(e => out.push(e));
-      if (S.collapse(out).length >= limit + 2) break;
+  /* ---------------- ajanda: bugün / kalanlar / yarın / bu hafta / sonra ---------------- */
+  function checkBtn(e) {
+    const b = document.createElement('button');
+    const miss = !e.done && e.date < TKEY;
+    b.className = 'chk' + (e.done ? ' on' : '') + (miss ? ' miss' : '');
+    b.setAttribute('aria-label', e.done ? 'Yapılmadı olarak işaretle' : 'Yapıldı olarak işaretle');
+    b.innerHTML = SVG.check;
+    b.onclick = ev => {
+      ev.stopPropagation();
+      S.toggleDone(e.id);
+      toast(e.done ? 'Yapılmadı olarak işaretlendi' : 'Yapıldı ✓');
+    };
+    return b;
+  }
+  function agendaCard(e, when) {
+    const card = document.createElement('div');
+    card.className = 'pcard' + (e.done ? ' is-done' : '');
+    card.appendChild(checkBtn(e));
+    const body = document.createElement('button'); body.className = 'pbody';
+    body.innerHTML = `<div class="pbar" style="background:${e.color}"></div>
+      <div style="flex:1;min-width:0"><div class="pttl">${esc(e.text)}</div>${when ? `<div class="pwhen">${when}</div>` : ''}</div>`;
+    body.onclick = () => openSheet(e, e.date);
+    card.appendChild(body);
+    return card;
+  }
+  function agendaEl() {
+    const frag = document.createDocumentFragment();
+    const withColor = e => Object.assign({}, e, { color: S.cat(e.cat).color });
+    const tomorrow = dkey(addDays(TODAY, 1));
+    const weekEnd = dkey(addDays(startOfWeek(TODAY), 6));
+    const dayLabel = k => { const dt = parseISO(k); return `${dt.getDate()} ${SHORT[dt.getMonth()]} ${DOW[dowMon(dt)]}`; };
+    const fullLabel = dt => `${DOW[dowMon(dt)]} · ${dt.getDate()} ${MONTHS[dt.getMonth()]}`;
+    const head = (cls, t, d, right) => {
+      const el = document.createElement('div'); el.className = 'agh' + (cls ? ' ' + cls : '');
+      el.innerHTML = `<div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ''}`;
+      if (right) el.appendChild(right);
+      return el;
+    };
+    const list = items => { const l = document.createElement('div'); l.className = 'prev'; items.forEach(x => l.appendChild(x)); return l; };
+
+    /* bugün */
+    const todayEvs = S.eventsOn(TKEY).map(withColor);
+    const box = document.createElement('div'); box.className = 'tbox';
+    const nDone = todayEvs.filter(e => e.done).length;
+    const cnt = document.createElement('div'); cnt.className = 'n';
+    cnt.textContent = todayEvs.length ? `${nDone}/${todayEvs.length} yapıldı` : '';
+    box.appendChild(head('', 'Bugün', fullLabel(TODAY), cnt));
+    if (todayEvs.length) box.appendChild(list(todayEvs.map(e => agendaCard(e, e.time || 'gün boyu'))));
+    else {
+      const em = document.createElement('button'); em.className = 'empty'; em.style.width = '100%';
+      em.innerHTML = 'Bugün için kayıt yok · <b style="color:var(--green)">+ ekle</b>';
+      em.onclick = () => openSheet(null, TKEY);
+      box.appendChild(em);
     }
-    return S.collapse(out).slice(0, limit);
+    frag.appendChild(box);
+
+    /* geçen günlerden kalan, yapılmamış */
+    const miss = S.collapse(S.overdue(7)).map(it => withColor(it.ev));
+    if (miss.length) {
+      frag.appendChild(head('miss', 'Yapılmadı', 'son 7 gün'));
+      frag.appendChild(list(miss.map(e => agendaCard(e, dayLabel(e.date) + (e.time ? ' · ' + e.time : '')))));
+    }
+
+    /* yarın */
+    const tmr = S.eventsOn(tomorrow).map(withColor);
+    const wk = document.createElement('button'); wk.className = 'a'; wk.textContent = 'Haftayı aç';
+    wk.onclick = () => { V.week = startOfWeek(TODAY); go('hafta', 'zin'); };
+    frag.appendChild(head('', 'Yarın', fullLabel(addDays(TODAY, 1)), wk));
+    if (tmr.length) frag.appendChild(list(tmr.map(e => agendaCard(e, e.time || 'gün boyu'))));
+    else { const em = document.createElement('div'); em.className = 'empty'; em.style.padding = '12px 4px'; em.textContent = 'Yarın boş.'; frag.appendChild(em); }
+
+    /* bu hafta (yarından sonra, pazara kadar) ve sonrası */
+    const future = S.data.events.filter(e => e.date > tomorrow)
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b));
+    const thisWeek = S.collapse(future.filter(e => e.date <= weekEnd));
+    const later = S.collapse(future.filter(e => e.date > weekEnd)).slice(0, 6);
+    const whenOf = it => (it.count > 1 ? S.spanLabel(it) : dayLabel(it.ev.date)) + (it.ev.time ? ' · ' + it.ev.time : '');
+    if (thisWeek.length) {
+      frag.appendChild(head('', 'Bu hafta'));
+      frag.appendChild(list(thisWeek.map(it => agendaCard(withColor(it.ev), whenOf(it)))));
+    }
+    if (later.length) {
+      frag.appendChild(head('', 'Sonra'));
+      frag.appendChild(list(later.map(it => agendaCard(withColor(it.ev), whenOf(it)))));
+    }
+    return frag;
   }
 
   /* ---------------- hafta ---------------- */
@@ -488,20 +586,27 @@ body[data-ui="mobile"] #app{
       const dt = addDays(V.week, i);
       const k = dkey(dt);
       const evs = dayEvents(dt.getFullYear(), dt.getMonth(), dt.getDate());
-      const today = k === TKEY;
-      const day = document.createElement('div'); day.className = 'wday';
+      const today = k === TKEY, past = k < TKEY;
+      const tag = today ? 'Bugün' : k === dkey(addDays(TODAY, 1)) ? 'Yarın' : '';
+      const day = document.createElement('div'); day.className = 'wday' + (today ? ' today' : past ? ' past' : '');
       day.innerHTML = `<div class="wleft">
           <div class="wdow">${DOW[i]}</div>
           <div class="wnum" style="color:${today ? '#f6f5f2' : INK};background:${today ? GREEN : 'transparent'}">${dt.getDate()}</div>
+          ${tag ? `<div class="wtag">${tag}</div>` : ''}
         </div><div class="wright"></div>`;
       const right = day.querySelector('.wright');
       evs.forEach(e => {
-        const b = document.createElement('button'); b.className = 'ev';
+        const row = document.createElement('div'); row.className = 'ev' + (e.done ? ' is-done' : '');
+        row.style.padding = '8px 13px 8px 9px';
+        row.appendChild(checkBtn(e));
+        const b = document.createElement('button');
+        b.style.cssText = 'flex:1;min-width:0;display:flex;align-items:center;gap:10px;text-align:left;padding:3px 0';
         b.innerHTML = `<div class="ev-c" style="background:${e.color}"></div>
           <div class="ev-t tnum">${esc(e.time || '—')}</div>
           <div class="ev-n">${esc(e.text)}${e.note ? ' <span style="opacity:.4;font-weight:500">· ' + esc(e.note) + '</span>' : ''}</div>`;
         b.onclick = () => openSheet(e, e.date);
-        right.appendChild(b);
+        row.appendChild(b);
+        right.appendChild(row);
       });
       const add = document.createElement('button'); add.className = 'addline';
       add.textContent = '+ ekle';
@@ -585,7 +690,8 @@ body[data-ui="mobile"] #app{
       note: ev ? (ev.note || '') : '',
       date: ev ? ev.date : date,
       time: ev ? (ev.time || '10:00') : '10:00',
-      cat: ev ? ev.cat : 'genel'
+      cat: ev ? ev.cat : 'genel',
+      done: ev ? !!ev.done : false
     };
     const box = document.createElement('div');
     const draw = () => {
@@ -603,6 +709,7 @@ body[data-ui="mobile"] #app{
           <input class="mini tnum" id="fTime" type="time" value="${dr.time}">
         </div>
       </div>
+      ${editing ? `<button class="tgl" id="fDone"><span class="chk${dr.done ? ' on' : ''}">${SVG.check}</span>${dr.done ? 'Yapıldı' : 'Yapılmadı — işaretlemek için dokun'}</button>` : ''}
       <div class="lab">Kategori</div>
       <div class="cats" id="fCats">${cats.map(c => `<button data-c="${c.id}" class="${c.id === dr.cat ? 'on' : ''}">
           <i style="background:${c.color}"></i>${esc(c.name)}</button>`).join('')}</div>
@@ -622,6 +729,8 @@ body[data-ui="mobile"] #app{
         b.onclick = () => { grab(); dr.cat = b.dataset.c; draw(); };
       });
       box.querySelector('#fSave').onclick = () => { grab(); commit(); };
+      const dn = box.querySelector('#fDone');
+      if (dn) dn.onclick = () => { grab(); dr.done = !dr.done; draw(); };
       const del = box.querySelector('#fDel');
       if (del) del.onclick = () => { S.deleteEvent(ev.id); closeSheet(); render(); toast('Kayıt silindi', true); };
       const delG = box.querySelector('#fDelG');
@@ -631,7 +740,7 @@ body[data-ui="mobile"] #app{
     };
     const commit = () => {
       if (!dr.title.trim()) dr.title = 'Yeni kayıt';
-      const payload = { date: dr.date, time: dr.time, text: dr.title.trim(), note: (dr.note || '').trim(), cat: dr.cat };
+      const payload = { date: dr.date, time: dr.time, text: dr.title.trim(), note: (dr.note || '').trim(), cat: dr.cat, done: !!dr.done };
       if (editing) S.updateEvent(ev.id, payload); else S.addEvent(payload);
       closeSheet();
       const dt = parseISO(dr.date);
@@ -825,6 +934,8 @@ body[data-ui="mobile"] #app{
       if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) step(dx < 0 ? 1 : -1);
     }, { passive: true });
 
+    window.addEventListener('resize', () => { if (document.body.dataset.ui === 'mobile') fitTitle(); });
+
     document.addEventListener('keydown', e => {
       if (document.body.dataset.ui !== 'mobile') return;
       if (sheetOpen) { if (e.key === 'Escape') closeSheet(); return; }
@@ -855,6 +966,7 @@ body[data-ui="mobile"] #app{
     buildShell();
     S.on('status', () => { if (document.body.dataset.ui === 'mobile') paintStatus(); });
     render();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitTitle);
   }
 
   return {
