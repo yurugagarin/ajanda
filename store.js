@@ -6,7 +6,7 @@
 var Store = (function () {
 
   /* sürüm: her güncellemede index.html'deki ?v= ile birlikte artırın — sağ üstte görünür */
-  const VERSION = '12', VERSION_DATE = '1 Eki 2026';
+  const VERSION = '13', VERSION_DATE = '1 Eki 2026';
   const LS_DATA = 'ajanda_data_v3';
   const LS_CFG = 'ajanda_cfg_v1';
   const OLD_KEYS = ['ajanda_2026_v1', 'ajanda_2027_v1', 'ajanda_2028_v1'];
