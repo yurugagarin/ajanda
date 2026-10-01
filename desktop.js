@@ -5,13 +5,22 @@
 var DesktopView = (function () {
   const S = Store;
   const TILE_ALPHA = 0.58;   /* gün kutucuğu renk yoğunluğu: canlı .70 · soluk .45 */
+  /* geçmiş günler: 'dark' = karartılmış · 'soft' = soluk/silik (ikisinde de kayıt rengi belli olur) */
+  const PAST_STYLE = 'dark';
+  /* birden çok kategori: kutucuk her kategori için eşit dikey şeritlere bölünür */
+  function stripes(cols, a) {
+    cols = cols.slice(0, 4);
+    if (cols.length < 2) return `linear-gradient(${S.rgba(cols[0], a)},${S.rgba(cols[0], a)})`;
+    const st = 100 / cols.length;
+    return 'linear-gradient(90deg,' + cols.map((c, i) => `${S.rgba(c, a)} ${i * st}% ${(i + 1) * st}%`).join(',') + ')';
+  }
 
   const CSS = `
 body[data-ui="desktop"]{
   --paper:#ece4d6; --card:#fbf8f2; --ink:#3a342c; --mut:#a8987c;
   --line:#e4dac8; --acc:#b5552e; --gold:#e3a23f;
   font-family:'Karla',system-ui,sans-serif;color:var(--ink)}
-.d-app *{box-sizing:border-box}
+.d-app *,.d-drawer *,.d-modal *{box-sizing:border-box}
 .d-app{min-height:100vh;background:radial-gradient(140% 100% at 50% 0%,#f1eadd 0%,#ece4d6 55%,#e4dac8 100%);padding:26px 32px 44px}
 .fr{font-family:'Fraunces',Georgia,serif}
 .d-wrap{max-width:1340px;margin:0 auto}
@@ -60,6 +69,15 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
 .d-wd button.on{background:#6b5f4d;border-color:#6b5f4d;color:#fbf8f2}
 .d-sum{flex:1;min-width:180px;font-size:13.5px;font-weight:600;color:#5a5142}
 .d-sum span{color:#a8987c;font-weight:600}
+.d-chk{width:20px;height:20px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;border:2px solid rgba(243,236,223,.35);background:none;cursor:pointer;padding:0;color:#fff}
+.d-chk svg{width:11px;height:11px;opacity:0}
+.d-chk.on{background:#6C9E6E;border-color:#6C9E6E}
+.d-chk.on svg{opacity:1}
+.d-chk.miss{border-color:#d08a6a}
+.d-chk.lt{border-color:#cdbb9c}
+.d-chk.lt.on{border-color:#6C9E6E}
+.d-done .d-tt{text-decoration:line-through;opacity:.55}
+.d-sub{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:8px;display:flex;align-items:baseline;gap:8px}
 @media (prefers-reduced-motion:reduce){.d-app *{animation:none!important;transition:none!important}}
 `;
 
@@ -165,43 +183,56 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       else { cdDays = Math.abs(diff); cdUnit = 'gün geçti'; }
     }
 
-    /* ---- üst kart ---- */
-    const todayEvents = byDate[tKey] || [];
-    const todayEvHtml = todayEvents.length ? todayEvents.map(ev => {
+    /* ---- üst kart: bugün · yarın · sonra ---- */
+    const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+    const tmrKey = S.shiftKey(tKey, 1);
+    const shortDay = k => { const p = S.parseKey(k); return p.d + ' ' + S.MONTHS_SHORT[p.m] + ' ' + S.WD_SHORT[S.weekday(k)]; };
+    const row = (ev, right, opt) => {
       const c = cm[ev.cat] || { color: '#8a7f6f', name: '' };
-      return `<div style="display:flex;align-items:center;gap:9px;background:rgba(243,236,223,.08);border-radius:9px;padding:7px 10px">
-        <span style="width:3px;height:20px;border-radius:3px;background:${c.color};flex:none"></span>
-        <div style="flex:1;min-width:0;font-size:13px;color:#f3ecdf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${S.esc(ev.text)}
+      const miss = !ev.done && ev.date < tKey;
+      const chk = opt && opt.noChk ? '' : `<button class="d-chk${ev.done ? ' on' : ''}${miss ? ' miss' : ''}" onclick="event.stopPropagation();DV.done('${ev.id}')" title="${ev.done ? 'Yapılmadı yap' : 'Yapıldı olarak işaretle'}">${CHECK}</button>`;
+      return `<div class="${ev.done ? 'd-done' : ''}" onclick="DV.open('${ev.date}')" style="display:flex;align-items:center;gap:9px;background:rgba(243,236,223,.08);border-radius:9px;padding:7px 10px;cursor:pointer">
+        ${chk}<span style="width:3px;height:20px;border-radius:3px;background:${c.color};flex:none"></span>
+        <div class="d-tt" style="flex:1;min-width:0;font-size:13px;color:#f3ecdf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${S.esc(ev.text)}
           <span style="color:#8f836f;font-weight:600">· ${S.esc(c.name)}</span></div>
-        ${ev.time ? `<span style="font-size:11.5px;color:#bcae97;font-weight:600">${ev.time}</span>` : ''}</div>`;
-    }).join('') : '<div style="border:1px dashed rgba(243,236,223,.26);border-radius:9px;padding:10px;text-align:center;color:#bcae97;font-size:12.5px">Bugüne ait kayıt yok.</div>';
+        ${right ? `<span style="font-size:11.5px;color:#bcae97;font-weight:600;white-space:nowrap">${right}</span>` : ''}</div>`;
+    };
+    const emptyBox = t => `<div style="border:1px dashed rgba(243,236,223,.26);border-radius:9px;padding:10px;text-align:center;color:#bcae97;font-size:12.5px">${t}</div>`;
 
-    const upcoming = S.collapse(S.data.events.filter(e => e.date > tKey)
-      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b))).slice(0, 4);
-    const upHtml = upcoming.length ? upcoming.map(it => {
-      const ev = it.ev, c = cm[ev.cat] || { color: '#8a7f6f', name: '' };
-      const when = S.spanLabel(it) + (ev.time ? ' · ' + ev.time : '');
-      return `<button onclick="DV.open('${ev.date}')" style="display:flex;align-items:center;gap:9px;background:rgba(243,236,223,.08);border:none;border-radius:9px;padding:7px 10px;cursor:pointer;text-align:left;width:100%;font-family:inherit">
-        <span style="width:3px;height:20px;border-radius:3px;background:${c.color};flex:none"></span>
-        <span style="flex:1;min-width:0;font-size:13px;color:#f3ecdf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${S.esc(ev.text)}
-          <span style="color:#8f836f;font-weight:600">· ${S.esc(c.name)}</span></span>
-        <span style="font-size:11.5px;color:#bcae97;font-weight:600;white-space:nowrap">${when}</span></button>`;
-    }).join('') : '<div style="border:1px dashed rgba(243,236,223,.26);border-radius:9px;padding:10px;text-align:center;color:#bcae97;font-size:12.5px">Yaklaşan kayıt yok.</div>';
+    const todayEvents = byDate[tKey] || [];
+    const nDone = todayEvents.filter(e => e.done).length;
+    let todayEvHtml = todayEvents.length ? todayEvents.map(ev => row(ev, ev.time)).join('') : emptyBox('Bugüne ait kayıt yok.');
+    const miss = S.collapse(S.overdue(7)).map(it => it.ev);
+    if (miss.length) todayEvHtml += `<div class="d-sub" style="color:#e09a74;margin:12px 0 0">Yapılmadı <span style="color:#8f836f;letter-spacing:1px">son 7 gün</span></div>`
+      + miss.map(ev => row(ev, shortDay(ev.date))).join('');
+
+    const tmrEvents = byDate[tmrKey] || [];
+    const tmrHtml = tmrEvents.length ? tmrEvents.map(ev => row(ev, ev.time)).join('') : emptyBox('Yarın boş.');
+
+    const upcoming = S.collapse(S.data.events.filter(e => e.date > tmrKey)
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b))).slice(0, 5);
+    const upHtml = upcoming.length ? upcoming.map(it => row(it.ev, (it.count > 1 ? S.spanLabel(it) : shortDay(it.ev.date)) + (it.ev.time ? ' · ' + it.ev.time : ''), { noChk: true })).join('')
+      : emptyBox('Yaklaşan kayıt yok.');
+    const tp1 = S.parseKey(tmrKey);
 
     const todayCard = `
-    <div style="background:#3a342c;border-radius:16px;padding:14px 18px;box-shadow:0 6px 18px rgba(58,52,44,.16);margin-bottom:16px;display:grid;grid-template-columns:minmax(190px,220px) 1fr 1fr;gap:20px;align-items:start">
+    <div style="background:#3a342c;border-radius:16px;padding:14px 18px;box-shadow:0 6px 18px rgba(58,52,44,.16);margin-bottom:16px;display:grid;grid-template-columns:minmax(170px,200px) 1.15fr 1fr 1fr;gap:20px;align-items:start">
       <div>
         <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);font-weight:700">Bugün</div>
         <div class="fr" style="font-size:26px;line-height:1.1;font-weight:600;color:#f3ecdf;margin-top:3px">${tp.d} ${S.MONTHS[tp.m]}</div>
         <div style="font-size:12.5px;font-weight:600;color:#bcae97">${S.WD_FULL[S.weekday(tKey)]}</div>
         <button onclick="DV.open('${tKey}')" style="margin-top:10px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:9px;padding:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Bugüne kayıt ekle</button>
       </div>
-      <div>
-        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#bcae97;font-weight:700;margin-bottom:8px">Bugünün kayıtları</div>
+      <div style="background:rgba(227,162,63,.07);box-shadow:inset 0 0 0 1px rgba(227,162,63,.3);border-radius:12px;padding:10px 10px 10px;margin:-4px 0">
+        <div class="d-sub" style="color:var(--gold)">Bugün <span style="color:#bcae97;letter-spacing:1px;margin-left:auto">${todayEvents.length ? nDone + '/' + todayEvents.length + ' yapıldı' : ''}</span></div>
         <div style="display:flex;flex-direction:column;gap:6px">${todayEvHtml}</div>
       </div>
       <div>
-        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#bcae97;font-weight:700;margin-bottom:8px">Yaklaşan</div>
+        <div class="d-sub" style="color:#f3ecdf">Yarın <span style="color:#8f836f;letter-spacing:1px">${tp1.d} ${S.MONTHS_SHORT[tp1.m]} ${S.WD_SHORT[S.weekday(tmrKey)]}</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px">${tmrHtml}</div>
+      </div>
+      <div>
+        <div class="d-sub" style="color:#bcae97">Sonra</div>
         <div style="display:flex;flex-direction:column;gap:6px">${upHtml}</div>
       </div>
     </div>`;
@@ -229,27 +260,39 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
           numColor = weekend ? '#b09a78' : '#5a5142', dots = [], dotShadow = '';
         const isPicked = pickedSet[k];
 
-        if (isPast) {
-          bg = '#4a4136'; bc = '#423a30'; numColor = '#b7a98f';
-          dots = colors.slice(0, 4); dotShadow = 'box-shadow:0 0 0 1px rgba(74,65,54,.9);';
+        const allDone = isPast && evs.length && evs.every(e => e.done);
+        if (isPast && PAST_STYLE === 'dark') {
+          /* karartılmış: koyu zemin, kayıtlı günlerde kategori rengi hafifçe karışır */
+          bg = evs.length ? stripes(colors, .42) + ',#4a4136' : '#4a4136';
+          bc = evs.length ? S.rgba(colors[0], .6) : '#423a30'; numColor = evs.length ? '#f3ecdf' : '#9d907a';
+        } else if (isPast) {
+          /* soluk: boş günler silik, kayıtlı günler kategori renginin açık tonunda */
+          bg = evs.length ? stripes(colors, .2) : 'transparent';
+          bc = evs.length ? S.rgba(colors[0], .32) : 'transparent';
+          numColor = evs.length ? colors[0] : '#d6cab5';
         } else if (evs.length) {
-          bg = S.rgba(colors[0], TILE_ALPHA);
+          bg = stripes(colors, TILE_ALPHA);
           bc = S.rgba(colors[0], .88);
           numColor = '#3a342c';
-          dots = colors.slice(1, 4);
         }
 
-        const radius = '8px', extra = '';
+        const radius = '8px';
+        let extra = '';
         let bw = '1px';
-        if (isToday) { bc = '#b5552e'; bw = '1.5px'; if (!evs.length && !isPast) { bg = '#fbeede'; numColor = '#b5552e'; } }
+        if (isToday) {   /* bugün: kalın çerçeve + hafif parlama */
+          bc = '#b5552e'; bw = '2.5px';
+          extra = 'box-shadow:0 0 0 3px rgba(181,85,46,.28),0 4px 10px rgba(181,85,46,.25);position:relative;z-index:1;';
+          if (!evs.length && !isPast) { bg = '#fbeede'; numColor = '#b5552e'; }
+        }
         if (isTarget) { bc = '#e3a23f'; bw = '1.5px'; }
         if (isPicked) { bc = '#3a342c'; bw = '2px'; if (!evs.length && !isPast) bg = '#efe4cd'; }
 
-        const dotsHtml = dots.map(c => '<span style="width:5px;height:5px;border-radius:50%;background:' + c + ';display:inline-block;' + dotShadow + '"></span>').join('');
-        const title = evs.map(e => (e.time ? e.time + ' ' : '') + e.text + ' (' + (cm[e.cat] || {}).name + ')').join(' · ');
-        const fw = (isToday || (evs.length && !isPast)) ? 700 : 500;
-        const ff = (evs.length && !isPast) ? "'Fraunces',Georgia,serif" : "'Karla',sans-serif";
-        const dc = evs.length ? ` data-c="${evs[0].cat}"` : '';
+        const dotsHtml = allDone ? `<span style="font-size:9px;line-height:5px;font-weight:900;color:${PAST_STYLE === 'dark' ? '#9fd0a1' : '#5d9a60'}">✓</span>`
+          : dots.map(c => '<span style="width:5px;height:5px;border-radius:50%;background:' + c + ';display:inline-block;' + dotShadow + '"></span>').join('');
+        const title = evs.map(e => (e.done ? '✓ ' : '') + (e.time ? e.time + ' ' : '') + e.text + ' (' + (cm[e.cat] || {}).name + ')').join(' · ');
+        const fw = (isToday || evs.length) ? 700 : 500;
+        const ff = evs.length ? "'Fraunces',Georgia,serif" : "'Karla',sans-serif";
+        const dc = evs.length ? ` data-c="${evs.map(e => e.cat).join(' ')}"` : '';
         cells += `<div class="d-cell"${dc} onclick="DV.cell('${k}')" title="${S.esc(title)}" style="height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:${radius};cursor:pointer;background:${bg};border:${bw} solid ${bc};${extra}">
           <span style="font-size:12.5px;line-height:1;font-weight:${fw};color:${numColor};font-family:${ff}">${n}</span>
           <div style="display:flex;gap:2px;justify-content:center;height:5px;margin-top:1px">${dotsHtml}</div></div>`;
@@ -333,11 +376,14 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       const evHtml = list.length ? list.map(ev => {
         const c = cm[ev.cat] || { color: '#8a7f6f', name: '' };
         const gn = ev.gid ? S.groupCount(ev.gid) : 0;
-        return `<div style="display:flex;gap:11px;background:#f3ecdd;border-radius:12px;padding:12px 13px">
+        const miss = !ev.done && ev.date < tKey;
+        return `<div class="${ev.done ? 'd-done' : ''}" style="display:flex;gap:11px;background:#f3ecdd;border-radius:12px;padding:12px 13px">
+          <button class="d-chk lt${ev.done ? ' on' : ''}${miss ? ' miss' : ''}" onclick="DV.done('${ev.id}')" title="${ev.done ? 'Yapılmadı yap' : 'Yapıldı olarak işaretle'}" style="margin-top:1px;width:22px;height:22px">${CHECK}</button>
           <span style="width:4px;border-radius:4px;background:${c.color};flex:none"></span>
           <div style="flex:1;min-width:0">
             <div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:${c.color}">${S.esc(c.name)}${ev.time ? ' · ' + ev.time : ''}</div>
-            <div style="font-size:14.5px;font-weight:600;white-space:pre-line;line-height:1.4;margin-top:2px">${S.esc(ev.text)}</div>
+            <div class="d-tt" style="font-size:14.5px;font-weight:600;white-space:pre-line;line-height:1.4;margin-top:2px">${S.esc(ev.text)}</div>
+            ${ev.done ? '<div style="font-size:11.5px;font-weight:700;color:#5d9a60;margin-top:3px">✓ Yapıldı</div>' : miss ? '<div style="font-size:11.5px;font-weight:700;color:#c0704a;margin-top:3px">Yapılmadı</div>' : ''}
             ${ev.note ? `<div style="font-size:13px;color:#6b5f4d;margin-top:5px;white-space:pre-line;line-height:1.45">${S.esc(ev.note)}</div>` : ''}</div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
             <button onclick="DV.del('${ev.id}')" title="Bu günü sil" style="background:none;border:none;color:#bba88a;font-size:17px;cursor:pointer;line-height:1">×</button>
@@ -483,6 +529,11 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         <button onclick="DV.saveCfg()" style="margin-top:14px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:11px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">Kaydet ve eşitle</button>
         <div style="margin-top:10px;font-size:13px;color:#8a7355;text-align:center">${S.esc(st1.text)}${c.last ? ' · son: ' + new Date(c.last).toLocaleString('tr-TR') : ''}</div>
         ${c.gist ? `<div style="margin-top:14px;background:#f3ecdd;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#6b5f4d;word-break:break-all">Telefona girilecek Gist ID:<br><b>${S.esc(c.gist)}</b></div>` : ''}
+        ${S.setupLink() ? `<div style="margin-top:14px;border:1px solid #e2d7c1;border-radius:12px;padding:12px">
+          <div style="font-size:12.5px;font-weight:700;color:#8a7355;margin-bottom:6px">Telefon bağlantısı</div>
+          <div style="font-size:12.5px;color:#8a7f6f;line-height:1.5;margin-bottom:8px">Telefonda bu bağlantıyı açınca ajanda tüm kayıtlarınla gelir. Sonra Paylaş → Ana Ekrana Ekle. Bağlantıda şifren (token) var, kimseyle paylaşma.</div>
+          <div style="display:flex;gap:8px"><input id="cfgLink" readonly value="${S.escAttr(S.setupLink())}" class="d-in" style="flex:1;min-width:0;background:#fff;font-size:12px" onclick="this.select()">
+          <button class="d-btn" onclick="DV.copyLink()">Kopyala</button></div></div>` : ''}
       </div>`;
     }
 
@@ -536,7 +587,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
   function applyDim() {
     let el = document.getElementById('dDimStyle');
     if (!el) { el = document.createElement('style'); el.id = 'dDimStyle'; document.head.appendChild(el); }
-    el.textContent = V.filter ? `.d-app .d-cell[data-c]:not([data-c="${V.filter}"]){opacity:.14}` : '';
+    el.textContent = V.filter ? `.d-app .d-cell[data-c]:not([data-c~="${V.filter}"]){opacity:.14}` : '';
   }
   /* durum noktası — tam yeniden çizim yapmadan */
   function paintStatus() {
@@ -625,6 +676,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       });
       V.draft.text = ''; V.draft.note = ''; render();
     },
+    done(id) { S.toggleDone(id); },
     del(id) { S.deleteEvent(id); render(); toast('Kayıt silindi', true); },
     delGroup(gid) { const n = S.groupCount(gid); S.deleteGroup(gid); render(); toast(n + ' gün silindi', true); },
     undo() { const n = S.undo(); V.toast = null; render(); if (n) toast(n + ' kayıt geri alındı'); },
@@ -653,6 +705,12 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       V.tools = false; render(); toast(S.data.events.length + ' kayıt .ics olarak indirildi');
     },
     settings() { V.setOpen = !V.setOpen; render(); },
+    copyLink() {
+      const el = document.getElementById('cfgLink'); if (!el) return;
+      const done = () => toast('Bağlantı kopyalandı');
+      if (navigator.clipboard) navigator.clipboard.writeText(el.value).then(done, () => { el.select(); document.execCommand('copy'); done(); });
+      else { el.select(); document.execCommand('copy'); done(); }
+    },
     saveCfg() {
       S.setCfg({ token: document.getElementById('cfgTok').value.trim(), gist: document.getElementById('cfgGist').value.trim() });
       S.sync().then(() => render());

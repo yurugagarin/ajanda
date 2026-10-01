@@ -173,7 +173,7 @@ var Store = (function () {
     if (!D.habitLog || typeof D.habitLog !== 'object') D.habitLog = {};
     if (!D.deleted || typeof D.deleted !== 'object') D.deleted = {};
     if (!D.countdown || typeof D.countdown !== 'object') D.countdown = { v: '', mt: 0 };
-    D.events = D.events.map(e => Object.assign({ time: '', note: '', amtType: 'none', amt: 0, mt: 1 }, e));
+    D.events = D.events.map(e => Object.assign({ time: '', note: '', amtType: 'none', amt: 0, done: false, mt: 1 }, e));
     if (D.cv !== CAT_VERSION) migrateCats(D);
     /* varsayılan kategoriler eksikse tamamla (silinmemişse) */
     const has = {}; D.cats.forEach(c => has[c.id] = 1);
@@ -306,7 +306,7 @@ var Store = (function () {
   function eventsOn(k) { return D.events.filter(e => e.date === k).sort(byTime); }
 
   function addEvent(ev) {
-    const e = Object.assign({ id: uid('e'), date: todayKey(), time: '', note: '', text: '', cat: 'mavi', amtType: 'none', amt: 0 }, ev);
+    const e = Object.assign({ id: uid('e'), date: todayKey(), time: '', note: '', text: '', cat: 'mavi', amtType: 'none', amt: 0, done: false }, ev);
     e.mt = now(); D.events.push(e); commit(); return e;
   }
   /* birden çok güne aynı kaydı ekler (seri = gid) */
@@ -315,7 +315,7 @@ var Store = (function () {
     (dates || []).forEach(d => {
       D.events.push(Object.assign(
         { id: uid('e'), time: '', note: '', text: '', cat: 'mavi', amtType: 'none', amt: 0 },
-        base || {}, { date: d, gid: gid, mt: t }));
+        base || {}, { date: d, gid: gid, done: false, mt: t }));
     });
     commit();
     return gid;
@@ -335,6 +335,16 @@ var Store = (function () {
   function updateEvent(id, patch) {
     D.events = D.events.map(e => e.id === id ? Object.assign({}, e, patch, { mt: now() }) : e);
     commit();
+  }
+  /* yapıldı / yapılmadı işareti */
+  function toggleDone(id) {
+    const ev = D.events.filter(e => e.id === id)[0];
+    if (ev) updateEvent(id, { done: !ev.done });
+  }
+  /* son n günden kalan, yapılmamış kayıtlar (bugün hariç) */
+  function overdue(days) {
+    const t = todayKey(), from = shiftKey(t, -(days || 7));
+    return D.events.filter(e => !e.done && e.date < t && e.date >= from).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : byTime(a, b));
   }
   let undoBin = null;
   function deleteEvent(id) {
@@ -634,7 +644,24 @@ var Store = (function () {
     } finally { syncing = false; }
   }
 
+  /* telefon bağlantısı: ?gist=...&k=... ile açılınca eşitleme bilgileri kendiliğinden girilir.
+     Bağlantı adres çubuğunda kalır; ana ekrana eklenen uygulama da aynı bağlantıyla açılır
+     (iPhone'da ana ekran uygulamasının hafızası Safari'den ayrıdır). */
+  function setupLink() {
+    const c = cfg();
+    if (!c.token || !c.gist) return '';
+    return location.origin + location.pathname + '?gist=' + encodeURIComponent(c.gist) + '&k=' + encodeURIComponent(c.token);
+  }
+  function applyLinkParams() {
+    const q = new URLSearchParams(location.search);
+    const gist = (q.get('gist') || '').trim(), tok = (q.get('k') || '').trim();
+    const c = cfg();
+    if (tok && gist && !c.token) setCfg({ token: tok, gist: gist });   /* bu cihazda kayıtlı ayar varsa ona dokunma */
+    else if (gist && c.token && !c.gist) setCfg({ gist: gist });
+  }
+
   function startAuto() {
+    applyLinkParams();
     if (cfg().token) setTimeout(() => sync(true), 400);
     document.addEventListener('visibilitychange', () => { if (!document.hidden && cfg().token) sync(true); });
     window.addEventListener('online', () => { if (cfg().token) sync(true); });
@@ -648,10 +675,10 @@ var Store = (function () {
     on, emit, commit, persist,
     dkey, todayKey, shiftKey, parseKey, weekday, esc, escAttr, rgba, money, uid, pad,
     catMap, habitMap, cat, eventsByDate, eventsOn, byTime,
-    addEvent, addEvents, groupCount, deleteGroup, updateEvent, deleteEvent, updateCat, addCat, setCountdown,
+    addEvent, addEvents, groupCount, deleteGroup, updateEvent, toggleDone, overdue, deleteEvent, updateCat, addCat, setCountdown,
     doneOn, toggleHabit, habitStreak, updateHabit, addHabit, deleteHabit,
     totals, exportJSON, importJSON, collapse, spanLabel, catUsage, eventsInCat, deleteCat, COLOR, groupDays, toICS, downloadICS, search, canUndo, undo,
-    cfg, setCfg, sync, createGist, startAuto,
+    cfg, setCfg, sync, createGist, startAuto, setupLink,
     get status() { return statusState; }
   };
 })();
