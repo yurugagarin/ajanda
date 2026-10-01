@@ -109,7 +109,7 @@ body[data-ui="mobile"] #app{
 .mob .ghost:active{background:var(--m2)}
 
 .mob .tabs{position:absolute;left:0;right:0;bottom:0;padding:8px 16px calc(14px + var(--safeB));background:rgba(246,245,242,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgba(27,26,24,.07);display:flex;gap:8px;z-index:30}
-.mob .tab{flex:1;padding:11px;border-radius:16px;text-align:center;font-size:12.5px;font-weight:700;color:var(--m5)}
+.mob .tab{flex:1;min-width:0;padding:11px 4px;border-radius:16px;text-align:center;font-size:12.5px;font-weight:700;color:var(--m5)}
 .mob .tab.on{background:var(--ink);color:var(--paper)}
 
 .mob .toast{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--safeB));padding:9px 16px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:12.5px;font-weight:600;z-index:60;white-space:nowrap;animation:mfadein .2s;pointer-events:none}
@@ -285,6 +285,7 @@ body[data-ui="mobile"] #app{
       <div class="tabs">
         <button class="tab" id="mTabY">Yıl</button>
         <button class="tab" id="mTabM">Ay</button>
+        <button class="tab" id="mTabW">Hafta</button>
         <button class="tab" id="mTabD">Gün</button>
       </div>
       <div id="mSheetHost"></div>
@@ -294,6 +295,13 @@ body[data-ui="mobile"] #app{
       if (V.level === 'hafta') { V.m = V.week.getMonth(); V.y = V.week.getFullYear(); go('ay', 'zout'); }
       else if (V.level === 'gun') { V.m = V.day.getMonth(); V.y = V.day.getFullYear(); go('ay', 'zout'); }
       else if (V.level === 'yil') go('ay', 'zin');
+    };
+    $('mTabW').onclick = () => {
+      if (V.level === 'hafta') return;
+      /* bakılan güne/aya göre hafta: gün → o günün haftası, başka ay → ayın ilk haftası, yoksa bu hafta */
+      const curMonth = V.y === TODAY.getFullYear() && V.m === TODAY.getMonth();
+      V.week = startOfWeek(V.level === 'gun' ? V.day : (V.level === 'ay' && !curMonth) ? new Date(V.y, V.m, 1) : TODAY);
+      go('hafta', 'zin');
     };
     $('mTabD').onclick = () => { if (V.level !== 'gun') openDay(dkey(V.day), false); };
     $('mToday').onclick = () => {
@@ -338,7 +346,8 @@ body[data-ui="mobile"] #app{
     saveLevel();
 
     $('mTabY').className = 'tab' + (V.level === 'yil' ? ' on' : '');
-    $('mTabM').className = 'tab' + (V.level === 'ay' || V.level === 'hafta' ? ' on' : '');
+    $('mTabM').className = 'tab' + (V.level === 'ay' ? ' on' : '');
+    $('mTabW').className = 'tab' + (V.level === 'hafta' ? ' on' : '');
     $('mTabD').className = 'tab' + (V.level === 'gun' ? ' on' : '');
 
     const wEnd = addDays(V.week, 6);
