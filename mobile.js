@@ -173,7 +173,6 @@ body[data-ui="mobile"] #app{
 .mob .wday.past .wleft,.mob .wday.past .ev>button:not(.chk){opacity:.55}
 .mob .wday.past .ev{background:rgba(255,255,255,.55)}
 .mob .wday.today .wright{background:rgba(47,122,91,.08);border-radius:16px;padding:8px;border-bottom:0;margin-bottom:6px}
-.mob .mtick{font-size:8px;line-height:4px;font-weight:900;color:var(--green)}
 .mob .tgl{margin-top:12px;display:flex;align-items:center;gap:12px;background:var(--card);border-radius:16px;padding:12px 14px;width:100%;font-size:15px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .mob .conn{margin:2px 0 16px;background:var(--card);border-radius:18px;padding:14px 14px 12px;box-shadow:0 1px 2px rgba(0,0,0,.05),inset 0 0 0 1.5px rgba(47,122,91,.35)}
 .mob .conn b{display:block;font-size:14.5px;font-weight:700;letter-spacing:-.01em}
@@ -183,6 +182,21 @@ body[data-ui="mobile"] #app{
 .mob .conn .row button{flex:1;padding:11px;border-radius:12px;font-size:13.5px;font-weight:700;background:var(--m1);color:var(--m6)}
 .mob .conn .row button.go{background:var(--green);color:#fff}
 .mob .conn .x{display:block;margin:8px auto 0;font-size:12px;font-weight:600;color:var(--m4)}
+.mob .kicker.back{font-size:14px;letter-spacing:-.01em;text-transform:none;color:var(--green);font-weight:700;cursor:pointer;gap:2px;margin-left:-3px}
+.mob .kicker.back svg{width:15px;height:15px}
+.mob .dtag{display:flex;align-items:baseline;gap:8px;margin:2px 2px 10px;font-size:13px;font-weight:700;color:var(--m5)}
+.mob .dtag b{color:var(--green)}
+.mob .dtag.past b{color:var(--m4)}
+.mob .cmp{background:var(--card);border-radius:20px;padding:4px 14px 14px;box-shadow:0 1px 2px rgba(0,0,0,.05),inset 0 0 0 1.5px rgba(47,122,91,.28)}
+.mob .cmp-in{width:100%;border:0;background:transparent;padding:13px 0 12px;font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--ink);outline:none}
+.mob .cmp-row{display:flex;align-items:center;gap:8px;border-top:1px solid var(--m2);padding-top:10px}
+.mob .cmp-cats{display:flex;gap:6px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.mob .cmp-cats::-webkit-scrollbar{display:none}
+.mob .cmp-cats button{flex:none;display:inline-flex;align-items:center;gap:6px;background:var(--m1);border-radius:999px;padding:8px 11px;font-size:13px;font-weight:600;color:var(--ink)}
+.mob .cmp-cats button i{width:9px;height:9px;border-radius:999px;display:block}
+.mob .cmp-cats button.on{background:var(--ink);color:var(--paper)}
+.mob .cmp .save{margin-top:12px;padding:14px}
+.mob .cmp .mini{width:104px;flex:none}
 .mob .note{margin-top:9px;text-align:center;font-size:11.5px;color:var(--m4);font-weight:500;line-height:1.45}
 `;
 
@@ -231,7 +245,7 @@ body[data-ui="mobile"] #app{
   /* ---------------- görünüm durumu ---------------- */
   let V = null;
   function loadLevel() {
-    try { const l = localStorage.getItem('ajanda_level_mob'); if (l === 'yil' || l === 'ay' || l === 'hafta') return l; } catch (e) { }
+    try { const l = localStorage.getItem('ajanda_level_mob'); if (l === 'yil' || l === 'ay' || l === 'hafta' || l === 'gun') return l; } catch (e) { }
     return 'ay';
   }
   function saveLevel() { try { localStorage.setItem('ajanda_level_mob', V.level); } catch (e) { } }
@@ -240,7 +254,8 @@ body[data-ui="mobile"] #app{
     V = {
       level: loadLevel(),
       y: TODAY.getFullYear(), m: TODAY.getMonth(), week: startOfWeek(TODAY),
-      anim: 'zin', hl: null, hlPast: false
+      anim: 'zin', hl: null, hlPast: false,
+      day: new Date(TODAY), from: 'ay', compose: false, draft: { cat: 'genel', time: '' }
     };
   }
 
@@ -268,20 +283,23 @@ body[data-ui="mobile"] #app{
       <div class="tabs">
         <button class="tab" id="mTabY">Yıl</button>
         <button class="tab" id="mTabM">Ay</button>
+        <button class="tab" id="mTabD">Gün</button>
       </div>
       <div id="mSheetHost"></div>
       <div id="mToastHost"></div>`;
     $('mTabY').onclick = () => { if (V.level !== 'yil') go('yil', 'zout'); };
     $('mTabM').onclick = () => {
       if (V.level === 'hafta') { V.m = V.week.getMonth(); V.y = V.week.getFullYear(); go('ay', 'zout'); }
+      else if (V.level === 'gun') { V.m = V.day.getMonth(); V.y = V.day.getFullYear(); go('ay', 'zout'); }
       else if (V.level === 'yil') go('ay', 'zin');
     };
+    $('mTabD').onclick = () => { if (V.level !== 'gun') openDay(dkey(V.day), false); };
     $('mToday').onclick = () => {
-      V.y = TODAY.getFullYear(); V.m = TODAY.getMonth(); V.week = startOfWeek(TODAY);
+      V.y = TODAY.getFullYear(); V.m = TODAY.getMonth(); V.week = startOfWeek(TODAY); V.day = new Date(TODAY);
       V.anim = 'zin'; render();
     };
     $('mAdd').onclick = () => openSheet(null, defaultDate());
-    $('mKicker').onclick = openSearch;
+    $('mKicker').onclick = () => { if (V.level === 'gun' || V.level === 'hafta') back(); else openSearch(); };
     bindGestures();
   }
 
@@ -307,6 +325,7 @@ body[data-ui="mobile"] #app{
   function setKicker(text) {
     const st = S.status;
     const dot = st.kind === 'err' ? '#b4622f' : (st.kind === 'sync' ? 'rgba(27,26,24,.3)' : '');
+    $('mKicker').className = 'kicker';
     $('mKicker').innerHTML = (dot ? `<i style="background:${dot}"></i>` : '') + esc(text);
   }
 
@@ -317,7 +336,8 @@ body[data-ui="mobile"] #app{
     saveLevel();
 
     $('mTabY').className = 'tab' + (V.level === 'yil' ? ' on' : '');
-    $('mTabM').className = 'tab' + (V.level !== 'yil' ? ' on' : '');
+    $('mTabM').className = 'tab' + (V.level === 'ay' || V.level === 'hafta' ? ' on' : '');
+    $('mTabD').className = 'tab' + (V.level === 'gun' ? ' on' : '');
 
     const wEnd = addDays(V.week, 6);
     const sameM = V.week.getMonth() === wEnd.getMonth();
@@ -328,13 +348,14 @@ body[data-ui="mobile"] #app{
 
     if (V.level === 'yil') setTitle(String(V.y), openYearPick);
     else if (V.level === 'ay') setTitle(MONTHS[V.m], openMonthPick);
+    else if (V.level === 'gun') setTitle(`${V.day.getDate()} ${MONTHS[V.day.getMonth()]}`, null);
     else setTitle(weekLabel, null);
     $('mTitle').classList.toggle('sm', V.level === 'hafta');
     fitTitle(); requestAnimationFrame(fitTitle);
-    setKicker({
+    if (V.level === 'gun' || V.level === 'hafta') setBack();
+    else setKicker({
       yil: `Yıl · ${yearCount(V.y)} kayıt`,
-      ay: `${V.y} · ${monthCount(V.y, V.m)} kayıt`,
-      hafta: `${V.week.getFullYear()} · ${weekNo(V.week)}. hafta`
+      ay: `${V.y} · ${monthCount(V.y, V.m)} kayıt`
     }[V.level]);
 
     navPair(step);
@@ -342,8 +363,36 @@ body[data-ui="mobile"] #app{
     sc.innerHTML = '';
     if (V.level === 'yil') sc.appendChild(viewYear());
     else if (V.level === 'ay') sc.appendChild(viewMonth());
+    else if (V.level === 'gun') sc.appendChild(viewDay());
     else sc.appendChild(viewWeek());
     sc.scrollTop = 0;
+    if (V.level === 'gun' && V.compose) {   /* güne dokununca yazma kutusu hemen açılır */
+      V.compose = false;
+      const inp = $('dIn'); if (inp) inp.focus();
+    }
+  }
+
+  /* ---------------- geri ---------------- */
+  function setBack() {
+    /* haftada, haftanın çoğunun düştüğü ay (perşembe) */
+    const mo = V.level === 'gun' && V.from === 'hafta' ? null : (V.level === 'gun' ? V.day : addDays(V.week, 3));
+    const label = mo ? MONTHS[mo.getMonth()] : 'Hafta';
+    const el = $('mKicker');
+    el.className = 'kicker back';
+    el.innerHTML = SVG.left + esc(label);
+  }
+  function back() {
+    if (V.level === 'gun' && V.from === 'hafta') { V.week = startOfWeek(V.day); go('hafta', 'zout'); return; }
+    const d = V.level === 'gun' ? V.day : addDays(V.week, 3);
+    V.y = d.getFullYear(); V.m = d.getMonth();
+    go('ay', 'zout');
+  }
+  /* bir günü aç; compose: yazma kutusuna hemen odaklan */
+  function openDay(k, compose) {
+    V.from = V.level === 'hafta' ? 'hafta' : 'ay';
+    V.day = parseISO(k); V.compose = !!compose;
+    try { history.pushState({ ajanda: 'gun' }, ''); } catch (e) { }
+    go('gun', 'zin');
   }
 
   function weekNo(dt) {
@@ -353,11 +402,13 @@ body[data-ui="mobile"] #app{
   function step(n) {
     if (V.level === 'yil') V.y += n;
     else if (V.level === 'ay') { const d = new Date(V.y, V.m + n, 1); V.y = d.getFullYear(); V.m = d.getMonth(); }
+    else if (V.level === 'gun') V.day = addDays(V.day, n);
     else V.week = addDays(V.week, 7 * n);
     V.anim = 'zin'; render();
   }
   function go(level, anim) { V.level = level; V.anim = anim || 'zin'; render(); }
   function defaultDate() {
+    if (V.level === 'gun') return dkey(V.day);
     if (V.level === 'hafta') return dkey(V.week <= TODAY && TODAY <= addDays(V.week, 6) ? TODAY : V.week);
     if (V.level === 'ay') return (V.y === TODAY.getFullYear() && V.m === TODAY.getMonth()) ? dkey(TODAY) : iso(V.y, V.m, 1);
     return dkey(TODAY);
@@ -381,9 +432,8 @@ body[data-ui="mobile"] #app{
         let bg = 'transparent', color = 'rgba(27,26,24,.42)', w = 400, ring = '';
         const cols = uniqCols(evs);
         if (evs.length) { bg = pie(cols); color = '#fff'; w = 700; }
-        if (k < TKEY) {   /* geçmiş: soluk, ama kayıtlı günler renginden belli */
-          color = 'rgba(27,26,24,.2)';
-          if (evs.length) { bg = pie(cols, .26); color = cols[0]; w = 600; }
+        if (k < TKEY) {   /* geçmiş: sade ve soluk — kayıt olsa da renk yok; ayrıntı ay/gün görünümünde */
+          bg = 'transparent'; color = 'rgba(27,26,24,.2)'; w = 400;
         }
         if (today) {
           color = '#fff'; w = 700;
@@ -512,34 +562,59 @@ body[data-ui="mobile"] #app{
         const cols = uniqCols(evs);
         if (evs.length) { bg = pie(cols); color = '#fff'; w = 700; }
         const past = k < TKEY;
-        if (past) {   /* geçmiş: soluk, ama kayıtlı günler renginden belli */
-          color = 'rgba(27,26,24,.24)'; w = 500;
-          if (evs.length) { bg = pie(cols, .24); color = cols[0]; w = 700; }
+        if (past) {   /* geçmiş: sade ve soluk — kayıt olsa da renk yok; güne dokununca ayrıntı açılır */
+          bg = 'transparent'; color = 'rgba(27,26,24,.24)'; w = 500;
         }
-        const allDone = past && evs.length && evs.every(e => e.done);
         if (today) {   /* bugün: boşluklu kalın yeşil halka */
           color = '#fff'; w = 700;
           if (!evs.length) bg = GREEN;
           ring = `box-shadow:0 0 0 2.5px var(--paper),0 0 0 5px ${GREEN};`;
         }
         const dimc = (V.hl && evs.length && !evs.some(e => e.cat === V.hl)) ? ' dim' : '';
-        const dots = allDone ? '<div class="mtick">✓</div>' : '';
-        return `<div class="mcell${dimc}">
+        return `<div class="mcell${dimc}" data-k="${k}">
           <div class="mnum" style="color:${color};background:${bg};font-weight:${w};${ring}">${d}</div>
-          <div class="mdots">${dots}</div></div>`;
+          <div class="mdots"></div></div>`;
       }).join('');
       const firstDay = slice.filter(x => x)[0];
-      row.onclick = () => { V.week = startOfWeek(new Date(V.y, V.m, firstDay)); go('hafta', 'zin'); };
+      row.querySelectorAll('[data-k]').forEach(c => c.onclick = () => openDay(c.dataset.k, true));
       rows.appendChild(row);
     }
     frag.appendChild(box);
 
     if (V.hl) { frag.appendChild(catListEl()); const lg0 = legendEl(); if (lg0) frag.appendChild(lg0); return frag; }
 
-    frag.appendChild(agendaEl());
+    /* bu ay açıksa bugün/yarın listesi, başka bir ay açıksa o ayın kayıtları */
+    const isCurMonth = V.y === TODAY.getFullYear() && V.m === TODAY.getMonth();
+    frag.appendChild(isCurMonth ? agendaEl() : monthListEl());
     const lg = legendEl(); if (lg) frag.appendChild(lg);
     return frag;
   }
+  /* ---------------- seçili ayın kayıtları ---------------- */
+  function monthListEl() {
+    const frag = document.createDocumentFragment();
+    const p = V.y + '-' + pad(V.m + 1);
+    const evs = S.data.events.filter(e => e.date.slice(0, 7) === p)
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b));
+    const items = S.collapse(evs);
+    const past = p < TKEY.slice(0, 7);
+    const hd = document.createElement('div'); hd.className = 'agh';
+    hd.innerHTML = `<div class="t">${MONTHS[V.m]} ${V.y}</div><div class="d">${past ? 'geçmiş' : ''}</div>
+      <div class="n">${evs.length ? evs.length + ' kayıt' : ''}</div>`;
+    frag.appendChild(hd);
+    const list = document.createElement('div'); list.className = 'prev';
+    if (!items.length) list.innerHTML = `<div class="empty">${MONTHS[V.m]} ayında kayıt yok.<br>Bir güne dokunup ekleyebilirsin.</div>`;
+    items.forEach(it => {
+      const e = Object.assign({}, it.ev, { color: S.cat(it.ev.cat).color });
+      const dt = parseISO(it.first);
+      const when = (it.count > 1 ? S.spanLabel(it) : `${dt.getDate()} ${SHORT[dt.getMonth()]} ${DOW[dowMon(dt)]}`) + (e.time ? ' · ' + e.time : '');
+      const card = agendaCard(e, when);
+      if (it.last < TKEY) card.style.opacity = '.6';
+      list.appendChild(card);
+    });
+    frag.appendChild(list);
+    return frag;
+  }
+
   /* ---------------- ajanda: bugün / kalanlar / yarın / bu hafta / sonra ---------------- */
   function checkBtn(e) {
     const b = document.createElement('button');
@@ -628,6 +703,58 @@ body[data-ui="mobile"] #app{
     return frag;
   }
 
+  /* ---------------- gün ---------------- */
+  function viewDay() {
+    const k = dkey(V.day);
+    const evs = dayEvents(V.day.getFullYear(), V.day.getMonth(), V.day.getDate());
+    const wrap = document.createElement('div'); wrap.className = V.anim;
+    const rel = k === TKEY ? 'Bugün' : k === dkey(addDays(TODAY, 1)) ? 'Yarın' : k === dkey(addDays(TODAY, -1)) ? 'Dün' : '';
+    const full = S.WD_FULL[dowMon(V.day)] + ' · ' + V.day.getFullYear();
+    wrap.innerHTML = `<div class="dtag${k < TKEY ? ' past' : ''}">${rel ? `<b>${rel}</b>` : ''}<span>${full}</span></div>`;
+
+    /* yazma kutusu */
+    const cats = S.catUsage();
+    if (!cats.some(c => c.id === V.draft.cat)) V.draft.cat = cats[0] ? cats[0].id : 'genel';
+    const cmp = document.createElement('div'); cmp.className = 'cmp';
+    const color = S.cat(V.draft.cat).color;
+    cmp.innerHTML = `<input class="cmp-in" id="dIn" placeholder="${V.day.getDate()} ${MONTHS[V.day.getMonth()]} için ne yapacaksın?" enterkeyhint="done" autocomplete="off">
+      <div class="cmp-row">
+        <input class="mini tnum" id="dTime" type="time" value="${V.draft.time}" aria-label="Saat (isteğe bağlı)">
+        <div class="cmp-cats">${cats.map(c => `<button data-c="${c.id}" class="${c.id === V.draft.cat ? 'on' : ''}"><i style="background:${c.color}"></i>${esc(c.name)}</button>`).join('')}</div>
+      </div>
+      <button class="save" id="dAdd" style="background:${color}">Ekle</button>`;
+    const add = () => {
+      const inp = cmp.querySelector('#dIn'), text = inp.value.trim();
+      if (!text) { inp.focus(); toast('Önce ne yapacağını yaz'); return; }
+      V.draft.time = cmp.querySelector('#dTime').value || '';
+      S.addEvent({ date: k, time: V.draft.time, text: text, cat: V.draft.cat });
+      V.draft.time = ''; V.compose = true; V.anim = '';
+      render(); toast('Eklendi');
+    };
+    cmp.querySelector('#dAdd').onclick = add;
+    cmp.querySelector('#dIn').onkeydown = e => { if (e.key === 'Enter') add(); };
+    cmp.querySelectorAll('.cmp-cats button').forEach(b => b.onclick = () => {
+      const keep = cmp.querySelector('#dIn').value;
+      V.draft.cat = b.dataset.c; V.draft.time = cmp.querySelector('#dTime').value || '';
+      cmp.querySelectorAll('.cmp-cats button').forEach(x => x.classList.toggle('on', x === b));
+      cmp.querySelector('#dAdd').style.background = S.cat(V.draft.cat).color;
+      cmp.querySelector('#dIn').value = keep;
+    });
+    wrap.appendChild(cmp);
+    /* seçili kategori görünür kalsın */
+    requestAnimationFrame(() => { const bx = cmp.querySelector('.cmp-cats'), on = bx && bx.querySelector('.on'); if (on) bx.scrollLeft = on.offsetLeft - bx.offsetLeft - 8; });
+
+    /* günün kayıtları */
+    const hd = document.createElement('div'); hd.className = 'agh';
+    hd.innerHTML = `<div class="t">Kayıtlar</div><div class="n">${evs.length ? evs.filter(e => e.done).length + '/' + evs.length + ' yapıldı' : ''}</div>`;
+    wrap.appendChild(hd);
+    const list = document.createElement('div'); list.className = 'prev';
+    if (!evs.length) list.innerHTML = '<div class="empty">Bu gün boş. Yukarıya yazıp Ekle\'ye bas.</div>';
+    evs.forEach(e => list.appendChild(agendaCard(e, e.time || 'gün boyu')));
+    wrap.appendChild(list);
+    return wrap;
+  }
+
   /* ---------------- hafta ---------------- */
   function viewWeek() {
     const wrap = document.createElement('div');
@@ -645,6 +772,8 @@ body[data-ui="mobile"] #app{
           ${tag ? `<div class="wtag">${tag}</div>` : ''}
         </div><div class="wright"></div>`;
       const right = day.querySelector('.wright');
+      day.querySelector('.wleft').style.cursor = 'pointer';
+      day.querySelector('.wleft').onclick = () => openDay(k, true);
       evs.forEach(e => {
         const row = document.createElement('div'); row.className = 'ev' + (e.done ? ' is-done' : '');
         row.style.padding = '8px 13px 8px 9px';
@@ -999,6 +1128,11 @@ body[data-ui="mobile"] #app{
     }, { passive: true });
 
     window.addEventListener('resize', () => { if (document.body.dataset.ui === 'mobile') fitTitle(); });
+    window.addEventListener('popstate', () => {
+      if (document.body.dataset.ui !== 'mobile') return;
+      if (sheetOpen) { closeSheet(); return; }
+      if (V.level === 'gun' || V.level === 'hafta') back();
+    });
 
     document.addEventListener('keydown', e => {
       if (document.body.dataset.ui !== 'mobile') return;
