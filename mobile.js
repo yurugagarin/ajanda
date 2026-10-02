@@ -340,6 +340,7 @@ body[data-ui="mobile"] #app{
   }
 
   /* ---------------- render ---------------- */
+  let lastViewKey = '';
   function render() {
     if (!V) initState();
     if (!$('mScroll')) buildShell();
@@ -371,12 +372,18 @@ body[data-ui="mobile"] #app{
 
     navPair(step);
     const sc = $('mScroll');
+    /* aynı ekran yeniden çiziliyorsa (ör. işaret, eşitleme) kaydırma yeri korunur;
+       başka ekrana geçince en üste dönülür */
+    const viewKey = [V.level, V.y, V.m, dkey(V.week), dkey(V.day)].join('|');
+    const keepTop = viewKey === lastViewKey ? sc.scrollTop : 0;
+    lastViewKey = viewKey;
     sc.innerHTML = '';
     if (V.level === 'yil') sc.appendChild(viewYear());
     else if (V.level === 'ay') sc.appendChild(viewMonth());
     else if (V.level === 'gun') sc.appendChild(viewDay());
     else sc.appendChild(viewWeek());
-    sc.scrollTop = 0;
+    sc.scrollTop = keepTop;
+    V.anim = '';   /* yakınlaşma animasyonu yalnızca bir kez, gezinirken oynar */
     if (V.level === 'gun' && V.compose) {   /* güne dokununca yazma kutusu hemen açılır */
       V.compose = false;
       const inp = document.querySelector('.rform #fTitle'); if (inp) inp.focus();
@@ -701,15 +708,24 @@ body[data-ui="mobile"] #app{
     const future = S.data.events.filter(e => e.date > tomorrow)
       .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b));
     const thisWeek = S.collapse(future.filter(e => e.date <= weekEnd));
-    const later = S.collapse(future.filter(e => e.date > weekEnd)).slice(0, 6);
+    /* bu haftadan sonrası: bu ayın kalanı ve gelecek ay, ay adıyla */
+    const monthEnd = dkey(new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0));
+    const nextEnd = dkey(new Date(TODAY.getFullYear(), TODAY.getMonth() + 2, 0));
+    const nextM = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 1);
+    const restMonth = S.collapse(future.filter(e => e.date > weekEnd && e.date <= monthEnd));
+    const nextMonth = S.collapse(future.filter(e => e.date > weekEnd && e.date > monthEnd && e.date <= nextEnd));
     const whenOf = it => (it.count > 1 ? S.spanLabel(it) : dayLabel(it.ev.date)) + (it.ev.time ? ' · ' + it.ev.time : '');
     if (thisWeek.length) {
       frag.appendChild(head('', 'Bu hafta'));
       frag.appendChild(list(thisWeek.map(it => agendaCard(withColor(it.ev), whenOf(it)))));
     }
-    if (later.length) {
-      frag.appendChild(head('', 'Sonra'));
-      frag.appendChild(list(later.map(it => agendaCard(withColor(it.ev), whenOf(it)))));
+    if (restMonth.length) {
+      frag.appendChild(head('', 'Bu ay', MONTHS[TODAY.getMonth()]));
+      frag.appendChild(list(restMonth.map(it => agendaCard(withColor(it.ev), whenOf(it)))));
+    }
+    if (nextMonth.length) {
+      frag.appendChild(head('', 'Gelecek ay', MONTHS[nextM.getMonth()] + (nextM.getFullYear() !== TODAY.getFullYear() ? ' ' + nextM.getFullYear() : '')));
+      frag.appendChild(list(nextMonth.map(it => agendaCard(withColor(it.ev), whenOf(it)))));
     }
     return frag;
   }

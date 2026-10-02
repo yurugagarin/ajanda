@@ -32,7 +32,8 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
 @media (max-width:1180px){.yc-grid{grid-template-columns:repeat(2,1fr)}}
 .d-scrim{position:fixed;inset:0;background:rgba(38,33,26,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .d-drawer{position:fixed;top:0;right:0;height:100vh;width:420px;max-width:94vw;
-  background:#fbf8f2;box-shadow:-18px 0 50px rgba(40,35,28,.28);display:flex;flex-direction:column;animation:drawerIn .22s ease}
+  background:#fbf8f2;box-shadow:-18px 0 50px rgba(40,35,28,.28);display:flex;flex-direction:column}
+.d-drawer.in{animation:drawerIn .22s ease}
 .d-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);max-height:84vh;overflow-y:auto;
   background:#fbf8f2;border-radius:18px;box-shadow:0 24px 60px rgba(40,35,28,.34);padding:24px}
 .d-yr{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -51,7 +52,8 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
 .d-chip.on{background:#3a342c;color:#f3ecdf;border-color:#3a342c}
 .d-toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,0);z-index:80;background:#3a342c;color:#f3ecdf;
   border-radius:12px;padding:11px 14px;display:flex;align-items:center;gap:14px;font-size:13.5px;font-weight:600;
-  box-shadow:0 12px 30px rgba(40,35,28,.3);animation:toastIn .18s ease}
+  box-shadow:0 12px 30px rgba(40,35,28,.3)}
+.d-toast.in{animation:toastIn .18s ease}
 .d-toast button{background:rgba(243,236,223,.14);border:1px solid rgba(243,236,223,.28);color:#f3ecdf;border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
 .d-res{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:30;background:var(--card);border:1px solid #e2d7c1;
   border-radius:12px;box-shadow:0 14px 34px rgba(40,35,28,.2);max-height:340px;overflow-y:auto;padding:6px}
@@ -141,7 +143,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
   /* ---------- bildirim ---------- */
   let toastT = null;
   function toast(msg, undo) {
-    V.toast = { msg: msg, undo: !!undo };
+    V.toast = { msg: msg, undo: !!undo, fresh: true };
     clearTimeout(toastT);
     toastT = setTimeout(() => { V.toast = null; render(); }, undo ? 7000 : 2600);
     render();
@@ -167,6 +169,10 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
   let skipGrab = false;
   function render() {
     if (V.multi && !skipGrab) grabRange();   /* dış kaynaklı çizimlerde alanları koru */
+    /* yeniden çizimde panel içi kaydırma yerleri korunur; panel yalnızca açılırken kayarak gelir */
+    const keep = {};
+    document.querySelectorAll('[data-keep]').forEach(el => keep[el.dataset.keep] = el.scrollTop);
+    const drawerCls = V.drawerFresh ? ' in' : '';
     skipGrab = false;
     const cm = S.catMap(), byDate = S.eventsByDate();
     const tKey = S.todayKey(), tp = S.parseKey(tKey);
@@ -210,10 +216,17 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
     const tmrEvents = byDate[tmrKey] || [];
     const tmrHtml = tmrEvents.length ? tmrEvents.map(ev => row(ev, ev.time)).join('') : emptyBox('Yarın boş.');
 
-    const upcoming = S.collapse(S.data.events.filter(e => e.date > tmrKey)
-      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b))).slice(0, 5);
-    const upHtml = upcoming.length ? upcoming.map(it => row(it.ev, (it.count > 1 ? S.spanLabel(it) : shortDay(it.ev.date)) + (it.ev.time ? ' · ' + it.ev.time : ''), { noChk: true })).join('')
-      : emptyBox('Yaklaşan kayıt yok.');
+    /* yarından sonrası: bu ayın kalanı ve gelecek ay, ay adıyla */
+    const nx = new Date(tp.y, tp.m + 1, 1);
+    const mEnd = S.dkey(tp.y, tp.m, new Date(tp.y, tp.m + 1, 0).getDate());
+    const nEnd = S.dkey(nx.getFullYear(), nx.getMonth(), new Date(nx.getFullYear(), nx.getMonth() + 1, 0).getDate());
+    const fut = S.data.events.filter(e => e.date > tmrKey && e.date <= nEnd)
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b));
+    const upRow = it => row(it.ev, (it.count > 1 ? S.spanLabel(it) : shortDay(it.ev.date)) + (it.ev.time ? ' · ' + it.ev.time : ''), { noChk: true });
+    const restM = S.collapse(fut.filter(e => e.date <= mEnd)), nextM = S.collapse(fut.filter(e => e.date > mEnd));
+    const upHtml = (restM.length ? restM.map(upRow).join('') : emptyBox('Bu ay başka kayıt yok.'))
+      + `<div class="d-sub" style="color:#bcae97;margin:10px 0 0">Gelecek ay <span style="color:#8f836f;letter-spacing:1px">${S.MONTHS[nx.getMonth()]}${nx.getFullYear() !== tp.y ? ' ' + nx.getFullYear() : ''}</span></div>`
+      + (nextM.length ? nextM.map(upRow).join('') : emptyBox('Gelecek ay kayıt yok.'));
     const tp1 = S.parseKey(tmrKey);
 
     const todayCard = `
@@ -233,7 +246,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         <div style="display:flex;flex-direction:column;gap:6px">${tmrHtml}</div>
       </div>
       <div>
-        <div class="d-sub" style="color:#bcae97">Sonra</div>
+        <div class="d-sub" style="color:#bcae97">Bu ay <span style="color:#8f836f;letter-spacing:1px">${S.MONTHS[tp.m]}</span></div>
         <div style="display:flex;flex-direction:column;gap:6px">${upHtml}</div>
       </div>
     </div>`;
@@ -396,14 +409,14 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         <span style="width:9px;height:9px;border-radius:50%;background:${c.color};display:inline-block"></span>${S.esc(c.name)}</button>`).join('');
 
       drawer = `<div class="d-scrim" onclick="DV.close()" style="z-index:40"></div>
-      <div class="d-drawer" style="z-index:41">
+      <div class="d-drawer${drawerCls}" style="z-index:41">
         <div style="padding:22px 24px 18px;border-bottom:1px solid #ece1cd">
           <div style="display:flex;align-items:flex-start;justify-content:space-between">
             <div><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#b3a488;font-weight:700">${S.WD_FULL[S.weekday(k)]}${k === tKey ? ' · bugün' : ''}</div>
               <div class="fr" style="font-size:30px;font-weight:600;line-height:1.05;margin-top:2px">${p.d} ${S.MONTHS[p.m]} ${p.y}</div></div>
             <button onclick="DV.close()" style="background:#efe7d6;border:none;width:34px;height:34px;border-radius:50%;font-size:18px;color:#6b5f4d;cursor:pointer">×</button></div>
           <button onclick="DV.target()" style="margin-top:12px;background:none;border:1px dashed #cdbb9c;border-radius:9px;padding:6px 11px;font-size:12.5px;font-weight:600;color:#9a7d4f;cursor:pointer;font-family:inherit">★ Bu günü geri sayım hedefi yap</button></div>
-        <div style="flex:1;overflow-y:auto;padding:18px 24px">
+        <div data-keep="day" style="flex:1;overflow-y:auto;padding:18px 24px">
           <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">${evHtml}</div>
           <div style="border-top:1px solid #ece1cd;padding-top:18px">
             <div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#b3a488;font-weight:700;margin-bottom:11px">Yeni kayıt</div>
@@ -439,13 +452,13 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
             ${ev.note ? `<div style="font-size:12.5px;color:#8a7f6f;margin-top:3px">${S.esc(ev.note)}</div>` : ''}</div></div>`;
       }).join('') : `<div style="text-align:center;color:#bdae93;padding:24px 0">${past ? 'Geçmişte kayıt yok.' : 'Bu kategoride yaklaşan kayıt yok.'}</div>`;
       filterPanel = `<div class="d-scrim" onclick="DV.filter(null)" style="z-index:38"></div>
-      <div class="d-drawer" style="z-index:39">
+      <div class="d-drawer${drawerCls}" style="z-index:39">
         <div style="padding:22px 24px 18px;border-bottom:1px solid #ece1cd;display:flex;align-items:flex-start;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:10px"><span style="width:16px;height:16px;border-radius:50%;background:${fc.color};flex:none"></span>
             <div><div class="fr" style="font-size:26px;font-weight:600;line-height:1.05">${S.esc(fc.name)}</div>
               <div style="font-size:12.5px;color:#a8987c;font-weight:600;margin-top:2px">${list.length} ${past ? 'geçmiş kayıt' : 'yaklaşan kayıt'}</div></div></div>
           <button onclick="DV.filter(null)" style="background:#efe7d6;border:none;width:34px;height:34px;border-radius:50%;font-size:18px;color:#6b5f4d;cursor:pointer">×</button></div>
-        <div style="flex:1;overflow-y:auto;padding:18px 24px">
+        <div data-keep="filter" style="flex:1;overflow-y:auto;padding:18px 24px">
           <div style="display:flex;gap:7px;margin-bottom:14px">
             <button class="d-chip ${past ? '' : 'on'}" onclick="DV.filterWhen(false)">Yaklaşan</button>
             <button class="d-chip ${past ? 'on' : ''}" onclick="DV.filterWhen(true)">Geçmiş${pastCount ? ' (' + pastCount + ')' : ''}</button>
@@ -539,8 +552,9 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       </div>`;
     }
 
-    const toastHtml = V.toast ? `<div class="d-toast"><span>${S.esc(V.toast.msg)}</span>${V.toast.undo ? '<button onclick="DV.undo()">Geri al</button>' : ''}</div>` : '';
+    const toastHtml = V.toast ? `<div class="d-toast${V.toast.fresh ? ' in' : ''}"><span>${S.esc(V.toast.msg)}</span>${V.toast.undo ? '<button onclick="DV.undo()">Geri al</button>' : ''}</div>` : '';
 
+    /* yeniden çizimde panel içi kaydırma yerleri korunur */
     document.getElementById('app').innerHTML = `
     <div class="d-app"><div class="d-wrap">
       <div class="d-ver">Sürüm ${S.VERSION} · ${S.VERSION_DATE}</div>
@@ -577,6 +591,9 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       <div style="text-align:center;margin-top:22px;font-size:12.5px;color:var(--mut)">Bir güne tıklayıp kayıt ekleyin · kategoriye tıklayınca sadece o kategori listelenir</div>
     </div></div>${drawer}${filterPanel}${catModal}${yearModal}${toolsModal}${setPanel}${toastHtml}`;
 
+    document.querySelectorAll('[data-keep]').forEach(el => { if (keep[el.dataset.keep]) el.scrollTop = keep[el.dataset.keep]; });
+    V.drawerFresh = false;
+    if (V.toast) V.toast.fresh = false;
     applyDim();
     paintStatus();
     if (V.qFocus) {
@@ -612,7 +629,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
     year(y) { V.year = y; V.yearPick = false; render(); },
     yearPick() { V.yearPick = !V.yearPick; render(); },
     toolsToggle() { V.tools = !V.tools; render(); },
-    filter(id) { V.filter = (id && V.filter !== id) ? id : null; V.filterPast = false; render(); },
+    filter(id) { if (id && !V.filter) V.drawerFresh = true; V.filter = (id && V.filter !== id) ? id : null; V.filterPast = false; render(); },
     filterWhen(past) { V.filterPast = !!past; render(); },
     cell(k) { if (V.multi) DV.pick(k); else DV.open(k); },
     goto(date) { V.year = Number(date.slice(0, 4)); V.q = ''; V.filter = null; DV.open(date); },
@@ -659,7 +676,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
     },
 
     /* gün paneli */
-    open(k) { V.selected = k; V.draft = { text: '', cat: V.draft.cat || 'genel', time: '', note: '' }; render(); },
+    open(k) { if (!V.selected) V.drawerFresh = true; V.selected = k; V.draft = { text: '', cat: V.draft.cat || 'genel', time: '', note: '' }; render(); },
     close() { V.selected = null; render(); },
     countdown(v) { S.setCountdown(v); },
     target() { if (V.selected) S.setCountdown(V.selected); },
