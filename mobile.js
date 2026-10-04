@@ -171,7 +171,7 @@ body[data-ui="mobile"] #app{
 .mob .tbox .empty{padding:14px 4px}
 .mob .wtag{margin-top:5px;font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--green)}
 .mob .wday.past .wleft,.mob .wday.past .ev>button:not(.chk){opacity:.55}
-.mob .wday.past .ev{background:rgba(255,255,255,.55)}
+.mob .wday.past .ev{background:#fafaf8}   /* opak: kaydırınca alttaki kırmızı görünmesin */
 .mob .wday.today .wright{background:rgba(47,122,91,.08);border-radius:16px;padding:8px;border-bottom:0;margin-bottom:6px}
 .mob .tgl{margin-top:12px;display:flex;align-items:center;gap:12px;background:var(--card);border-radius:16px;padding:12px 14px;width:100%;font-size:15px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .mob .conn{margin:2px 0 16px;background:var(--card);border-radius:18px;padding:14px 14px 12px;box-shadow:0 1px 2px rgba(0,0,0,.05),inset 0 0 0 1.5px rgba(47,122,91,.35)}
@@ -199,12 +199,22 @@ body[data-ui="mobile"] #app{
 .mob .frow #fTime{width:118px;flex:none}
 .mob .frow #fDate{min-width:0}
 .mob .tgl{text-align:left}
+/* kaydırıp silme: kart sağa ya da sola çekilince altından Sil çıkar */
+.mob .sw{position:relative;border-radius:16px;overflow:hidden;flex:none}
+.mob .sw.ev-sw{border-radius:14px}
+.mob .sw-bg{position:absolute;inset:0;display:flex;justify-content:space-between;background:#c4513f;opacity:0}
+.mob .sw.moving .sw-bg,.mob .sw.open .sw-bg{opacity:1}
+.mob .sw-bg button{width:88px;color:#fff;font-size:12.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.mob .sw-bg svg{width:19px;height:19px}
+.mob .sw-fg{position:relative;touch-action:pan-y;transition:transform .22s cubic-bezier(.2,.8,.2,1);will-change:transform}
+.mob .sw.moving .sw-fg{transition:none}
 .mob .note{margin-top:9px;text-align:center;font-size:11.5px;color:var(--m4);font-weight:500;line-height:1.45}
 `;
 
   const SVG = {
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
   };
@@ -377,6 +387,7 @@ body[data-ui="mobile"] #app{
     const viewKey = [V.level, V.y, V.m, dkey(V.week), dkey(V.day)].join('|');
     const keepTop = viewKey === lastViewKey ? sc.scrollTop : 0;
     lastViewKey = viewKey;
+    openSwipe = null;
     sc.innerHTML = '';
     if (V.level === 'yil') sc.appendChild(viewYear());
     else if (V.level === 'ay') sc.appendChild(viewMonth());
@@ -647,6 +658,60 @@ body[data-ui="mobile"] #app{
     };
     return b;
   }
+  /* ---------------- kaydırıp silme ----------------
+     Kart sağa ya da sola çekilince altından kırmızı "Sil" çıkar (iPhone Mail gibi).
+     Yarıdan fazla çekilirse kayıt doğrudan silinir. Silinen kayıt "Geri al" ile döner. */
+  let openSwipe = null;
+  function closeOpenSwipe() { if (openSwipe) { openSwipe.close(); openSwipe = null; } }
+  function swipeable(fg, e, cls) {
+    const wrap = document.createElement('div'); wrap.className = 'sw' + (cls ? ' ' + cls : '');
+    const bg = document.createElement('div'); bg.className = 'sw-bg';
+    bg.innerHTML = `<button aria-label="Sil">${SVG.trash}Sil</button><button aria-label="Sil">${SVG.trash}Sil</button>`;
+    fg.classList.add('sw-fg');
+    wrap.appendChild(bg); wrap.appendChild(fg);
+    const OPEN = 88;
+    let x0 = 0, y0 = 0, base = 0, cur = 0, mode = '', w = 0;
+    const set = x => { cur = x; fg.style.transform = x ? `translateX(${x}px)` : ''; };
+    const api = { close: () => { wrap.classList.remove('open'); set(0); } };
+    const del = () => {
+      openSwipe = null;
+      set(cur >= 0 ? w : -w);
+      setTimeout(() => {
+        S.deleteEvent(e.id);
+        toast(e.gid && S.groupCount(e.gid) ? 'Bu gün silindi' : 'Kayıt silindi', true);
+      }, 180);
+    };
+    bg.querySelectorAll('button').forEach(b => b.onclick = ev => { ev.stopPropagation(); del(); });
+    fg.addEventListener('touchstart', ev => {
+      if (ev.touches.length !== 1) return;
+      if (openSwipe && openSwipe !== api) closeOpenSwipe();
+      x0 = ev.touches[0].clientX; y0 = ev.touches[0].clientY; base = cur; mode = ''; w = wrap.offsetWidth;
+    }, { passive: true });
+    fg.addEventListener('touchmove', ev => {
+      const dx = ev.touches[0].clientX - x0, dy = ev.touches[0].clientY - y0;
+      if (!mode) {
+        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.2) { mode = 'h'; wrap.classList.add('moving'); }
+        else if (Math.abs(dy) > 8) mode = 'v';
+      }
+      if (mode === 'h') set(base + dx);
+    }, { passive: true });
+    const end = () => {
+      if (mode !== 'h') { mode = ''; return; }
+      mode = ''; wrap.classList.remove('moving');
+      if (Math.abs(cur) > w * 0.5) { del(); return; }                /* sonuna kadar çekildi: sil */
+      if (Math.abs(cur) > OPEN * 0.6) {                              /* yarım: Sil düğmesi açık kalsın */
+        set(cur > 0 ? OPEN : -OPEN); wrap.classList.add('open'); openSwipe = api;
+      } else api.close();
+    };
+    fg.addEventListener('touchend', end, { passive: true });
+    fg.addEventListener('touchcancel', end, { passive: true });
+    /* açıkken karta dokunmak kaydı açmaz, yalnızca kapatır */
+    fg.addEventListener('click', ev => {
+      if (cur) { ev.stopPropagation(); ev.preventDefault(); api.close(); if (openSwipe === api) openSwipe = null; }
+    }, true);
+    return wrap;
+  }
+
   function agendaCard(e, when) {
     const card = document.createElement('div');
     card.className = 'pcard' + (e.done ? ' is-done' : '');
@@ -656,7 +721,7 @@ body[data-ui="mobile"] #app{
       <div style="flex:1;min-width:0"><div class="pttl">${esc(e.text)}</div>${when ? `<div class="pwhen">${when}</div>` : ''}</div>`;
     body.onclick = () => openSheet(e, e.date);
     card.appendChild(body);
-    return card;
+    return swipeable(card, e);
   }
   function agendaEl() {
     const frag = document.createDocumentFragment();
@@ -783,7 +848,7 @@ body[data-ui="mobile"] #app{
           <div class="ev-n">${esc(e.text)}${e.note ? ' <span style="opacity:.4;font-weight:500">· ' + esc(e.note) + '</span>' : ''}</div>`;
         b.onclick = () => openSheet(e, e.date);
         row.appendChild(b);
-        right.appendChild(row);
+        right.appendChild(swipeable(row, e, 'ev-sw'));
       });
       const add = document.createElement('button'); add.className = 'addline';
       add.textContent = '+ ekle';
@@ -1133,7 +1198,7 @@ body[data-ui="mobile"] #app{
     sc.addEventListener('touchstart', e => {
       if (e.touches.length !== 1) return;
       /* formda ya da kaydırılabilir alanda parmak hareketi sayfayı değiştirmesin */
-      if (e.target.closest && e.target.closest('input,textarea,select,.rform,.cats,.legend')) { sw = false; return; }
+      if (e.target.closest && e.target.closest('input,textarea,select,.rform,.cats,.legend,.sw')) { sw = false; return; }
       sx = e.touches[0].clientX; sy = e.touches[0].clientY; sw = true;
     }, { passive: true });
     sc.addEventListener('touchend', e => {
