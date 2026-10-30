@@ -48,6 +48,33 @@
   let t = null;
   window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(mount, 200); });
 
+  /* yeni sürüm kontrolü: telefon sayfanın eski kopyasını açtıysa (ana ekran uygulaması,
+     GitHub Pages önbelleği) sunucudaki version.json'a bakılır; sürüm farklıysa sayfa
+     önbelleği atlayan bir adresle yeniden yüklenir. version.json her güncellemede
+     store.js içindeki VERSION ile birlikte artırılmalı. */
+  function checkUpdate() {
+    if (!/^https?:$/.test(location.protocol)) return;
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;   /* yazarken yenileme */
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        if (!j || !j.v || String(j.v) === String(Store.VERSION)) return;
+        const key = 'ajanda_guncelle_' + j.v;
+        try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (e) { }
+        const u = new URL(location.href); u.searchParams.set('_s', j.v);
+        location.replace(u.toString());
+      })
+      .catch(() => { });
+  }
+  /* güncellemeden sonra adresteki işareti temizle (gist/k gibi diğerleri kalır) */
+  if (new URLSearchParams(location.search).has('_s')) {
+    const u = new URL(location.href); u.searchParams.delete('_s');
+    history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+  }
+
   mount();
   Store.startAuto();
+  setTimeout(checkUpdate, 800);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
 })();
