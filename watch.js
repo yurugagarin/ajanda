@@ -11,22 +11,51 @@ var WatchView = (function () {
 
   /* platformlar — düğme olarak seçilir */
   const PLATS = [
-    { id: 'youtube', name: 'YouTube', color: '#ff2d55', ink: '#fff' },
-    { id: 'netflix', name: 'Netflix', color: '#e50914', ink: '#fff' },
-    { id: 'appletv', name: 'Apple TV', color: '#f2f2f7', ink: '#111' },
-    { id: 'prime', name: 'Prime Video', color: '#1aa3ff', ink: '#fff' },
-    { id: 'disney', name: 'Disney+', color: '#3d5afe', ink: '#fff' },
-    { id: 'web', name: 'İnternet', color: '#22c55e', ink: '#062b14' }
+    { id: 'youtube', name: 'YouTube', color: '#f6b3b8', ink: '#5a1f26' },
+    { id: 'netflix', name: 'Netflix', color: '#e79a9a', ink: '#4f1616' },
+    { id: 'appletv', name: 'Apple TV', color: '#d9d9e0', ink: '#2c2c33' },
+    { id: 'prime', name: 'Prime Video', color: '#a9d2f2', ink: '#14375a' },
+    { id: 'disney', name: 'Disney+', color: '#bcc3f5', ink: '#20286b' },
+    { id: 'web', name: 'İnternet', color: '#ade3c4', ink: '#174a2e' }
   ];
+
+  /* renk temaları — hepsi pastel; THEME seçilir (önizlemede ?wtema= ile denenir) */
+  const THEMES = {
+    lavanta: { name: 'Lavanta', bg: '#f4f0fa', bg2: '#e9e1f6', card: '#ffffff', item: '#ffffff', line: '#e2d9f0', ink: '#2e2840', mut: '#6f6786', dim: '#a59cbb',
+      acc: '#c3b1ea', accInk: '#2e2149', ok: '#b49de6', del: '#eeb4bf', btn: '#d9ccf3', btnInk: '#3b2d5c', dark: false },
+    seftali: { name: 'Şeftali', bg: '#fdf3ec', bg2: '#fbe4d6', card: '#ffffff', item: '#fffaf6', line: '#f2ddcf', ink: '#3b2a22', mut: '#7c665b', dim: '#b9a295',
+      acc: '#f6c1a4', accInk: '#4a2615', ok: '#f0a988', del: '#efb0ad', btn: '#f9d4bf', btnInk: '#5a321e', dark: false },
+    nane: { name: 'Nane', bg: '#eef7f2', bg2: '#dcefe5', card: '#ffffff', item: '#fbfefc', line: '#d3e8dc', ink: '#21352b', mut: '#5d7568', dim: '#98b0a3',
+      acc: '#a9dcc3', accInk: '#173d2b', ok: '#8dd0b0', del: '#efb3b3', btn: '#c5e8d6', btnInk: '#1f4a35', dark: false },
+    gokyuzu: { name: 'Gökyüzü', bg: '#eef4fb', bg2: '#dce8f6', card: '#ffffff', item: '#fbfdff', line: '#d6e2f0', ink: '#223042', mut: '#5f7086', dim: '#9badc3',
+      acc: '#b0cdee', accInk: '#173252', ok: '#93bbe6', del: '#efb3bb', btn: '#cadcf3', btnInk: '#22406a', dark: false },
+    gul: { name: 'Gül kurusu', bg: '#f9eff0', bg2: '#f2dfe2', card: '#ffffff', item: '#fffbfb', line: '#ecd6da', ink: '#3a262b', mut: '#7b6268', dim: '#b89ea4',
+      acc: '#e7b8c1', accInk: '#4b1f2a', ok: '#dca2ae', del: '#e9a9a9', btn: '#f0cdd4', btnInk: '#5a2c38', dark: false },
+    gece: { name: 'Gece pastel', bg: '#2b2a3d', bg2: '#37344f', card: 'rgba(255,255,255,.06)', item: '#34324a', line: 'rgba(255,255,255,.09)', ink: '#f1eef8', mut: '#b7b2cc', dim: '#8a85a3',
+      acc: '#c9b8ee', accInk: '#2b2140', ok: '#c9b8ee', del: '#e7a6b3', btn: '#cdbdf0', btnInk: '#2e2347', dark: true }
+  };
+  let THEME = 'lavanta';
+  try { const q = new URLSearchParams(location.search).get('wtema'); if (q && THEMES[q]) THEME = q; } catch (e) { }
+  const T = () => THEMES[THEME];
+  function themeVars(t) {
+    return `--wl-bg:${t.bg};--wl-bg2:${t.bg2};--wl-card:${t.card};--wl-item:${t.item};--wl-line:${t.line};--wl-ink:${t.ink};--wl-mut:${t.mut};--wl-dim:${t.dim};` +
+      `--wl-acc:${t.acc};--wl-acc-ink:${t.accInk};--wl-ok:${t.ok};--wl-del:${t.del};--wl-shadow:${t.dark ? 'rgba(0,0,0,.35)' : 'rgba(60,40,90,.10)'}`;
+  }
+  /* ajandadaki açma düğmesi de temanın renginde */
+  function paintEntry() {
+    let el = document.getElementById('watch-btn-css');
+    if (!el) { el = document.createElement('style'); el.id = 'watch-btn-css'; document.head.appendChild(el); }
+    const t = T();
+    el.textContent = `body .mob .wbtn,body .d-watch{background:${t.btn};color:${t.btnInk};box-shadow:0 2px 8px rgba(60,40,90,.12)}
+body .mob .wbtn .pl,body .mob .wbtn b,body .d-watch span,body .d-watch b{background:${t.btnInk};color:${t.btn}}`;
+  }
+  paintEntry();
   const PMAP = {}; PLATS.forEach(p => PMAP[p.id] = p);
-  const plat = id => PMAP[id] || { id: '', name: 'Platform yok', color: 'rgba(255,255,255,.25)', ink: '#fff' };
+  const plat = id => PMAP[id] || { id: '', name: 'Platform yok', color: '#dcd8e3', ink: '#3a3448' };
 
   const CSS = `
-.wl{--wl-bg:#120f24;--wl-bg2:#241345;--wl-card:rgba(255,255,255,.07);--wl-line:rgba(255,255,255,.1);
-  --wl-ink:#fbf7ff;--wl-mut:rgba(251,247,255,.6);--wl-dim:rgba(251,247,255,.38);
-  --wl-hot:#ff4d8d;--wl-sun:#ffb238;--wl-grad:linear-gradient(120deg,#ff4d8d 0%,#ff7a59 55%,#ffb238 100%);
-  position:fixed;inset:0;z-index:90;display:flex;justify-content:center;
-  background:rgba(8,6,18,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+.wl{position:fixed;inset:0;z-index:90;display:flex;justify-content:center;
+  background:rgba(30,24,44,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
   font-family:-apple-system,BlinkMacSystemFont,system-ui,"Segoe UI","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
 .wl *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 /* sıfırlama :where ile — bileşen kurallarını ezmesin */
@@ -34,11 +63,10 @@ var WatchView = (function () {
 .wl input{font-family:inherit}
 @keyframes wlUp{from{transform:translateY(36px);opacity:0}to{transform:none;opacity:1}}
 .wl-page{position:relative;width:100%;max-width:440px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  color:var(--wl-ink);background:radial-gradient(120% 60% at 100% 0%,#4a1d6e 0%,rgba(74,29,110,0) 60%),
-  radial-gradient(90% 50% at 0% 100%,#3a1240 0%,rgba(58,18,64,0) 70%),linear-gradient(180deg,var(--wl-bg2),var(--wl-bg) 45%);
+  color:var(--wl-ink);background:linear-gradient(180deg,var(--wl-bg2) 0%,var(--wl-bg) 40%);
   padding:calc(14px + env(safe-area-inset-top,0px)) 18px calc(40px + env(safe-area-inset-bottom,0px))}
 .wl-page.in{animation:wlUp .32s cubic-bezier(.2,.8,.2,1)}
-@media(min-width:700px){.wl-page{height:calc(100% - 48px);margin-top:24px;border-radius:28px;box-shadow:0 30px 80px rgba(0,0,0,.45)}}
+@media(min-width:700px){.wl-page{height:calc(100% - 48px);margin-top:24px;border-radius:28px;box-shadow:0 30px 80px rgba(20,14,34,.3)}}
 @media(prefers-reduced-motion:reduce){.wl-page.in{animation:none}}
 
 .wl-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -46,26 +74,24 @@ var WatchView = (function () {
 .wl-back svg{width:16px;height:16px}
 .wl-cnt{font-size:12px;font-weight:700;color:var(--wl-mut);background:var(--wl-card);border:1px solid var(--wl-line);border-radius:999px;padding:5px 11px}
 .wl-h1{margin:14px 0 2px;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:-.03em}
-.wl-h1 span{background:var(--wl-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .wl-sub{font-size:13.5px;color:var(--wl-mut);margin:0 0 16px}
 
-.wl-form{background:var(--wl-card);border:1px solid var(--wl-line);border-radius:22px;padding:6px 14px 14px}
+.wl-form{background:var(--wl-card);border:1px solid var(--wl-line);border-radius:22px;padding:6px 14px 14px;box-shadow:0 6px 20px var(--wl-shadow)}
 .wl-in{width:100%;border:0;background:transparent;color:var(--wl-ink);outline:none;padding:13px 0;font-size:18px;font-weight:700;letter-spacing:-.01em}
 .wl-in::placeholder{color:var(--wl-dim)}
 .wl-in.note{font-size:14.5px;font-weight:500;padding:11px 0;border-top:1px solid var(--wl-line)}
 .wl-lab{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--wl-dim);margin:10px 0 8px}
 .wl-plats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .wl-plat{display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;border-radius:14px;padding:8px 6px;
-  font-size:13.5px;font-weight:700;background:rgba(255,255,255,.06);border:1.5px solid var(--wl-line);color:var(--wl-ink);transition:transform .12s,background .15s}
+  font-size:13.5px;font-weight:700;background:var(--wl-item);border:1.5px solid var(--wl-line);color:var(--wl-ink);transition:transform .12s,background .15s}
 .wl-plat i{width:9px;height:9px;border-radius:50%;flex:none}
 .wl-plat:active{transform:scale(.96)}
 .wl-plat.on{border-color:transparent}
-.wl-save{margin-top:14px;width:100%;padding:15px;border-radius:16px;background:var(--wl-grad);color:#1a0c22;font-size:15.5px;font-weight:800;letter-spacing:-.01em;
-  box-shadow:0 10px 26px rgba(255,77,141,.35)}
+.wl-save{margin-top:14px;width:100%;padding:15px;border-radius:16px;background:var(--wl-acc);color:var(--wl-acc-ink);font-size:15.5px;font-weight:800;letter-spacing:-.01em}
 .wl-save:active{transform:scale(.985)}
 .wl-row2{display:flex;gap:8px;margin-top:8px}
-.wl-row2 button{flex:1;padding:12px;border-radius:14px;font-size:13.5px;font-weight:700;background:rgba(255,255,255,.08);color:var(--wl-mut)}
-.wl-row2 .del{color:#ff8fa8;background:rgba(255,77,141,.12)}
+.wl-row2 button{flex:1;padding:12px;border-radius:14px;font-size:13.5px;font-weight:700;background:var(--wl-line);color:var(--wl-mut)}
+.wl-row2 .del{color:var(--wl-ink);background:var(--wl-del)}
 
 .wl-filt{display:flex;gap:7px;overflow-x:auto;margin:22px -18px 0;padding:0 18px 4px;scrollbar-width:none}
 .wl-filt::-webkit-scrollbar{display:none}
@@ -73,36 +99,37 @@ var WatchView = (function () {
   background:var(--wl-card);border:1px solid var(--wl-line);color:var(--wl-mut)}
 .wl-chip i{width:8px;height:8px;border-radius:50%}
 .wl-chip b{font-weight:800;opacity:.6}
-.wl-chip.on{background:var(--wl-ink);color:#120f24;border-color:transparent}
+.wl-chip.on{background:var(--wl-ink);color:var(--wl-bg);border-color:transparent}
 
 .wl-list{display:flex;flex-direction:column;gap:10px;margin-top:14px}
 .wl-sw{position:relative;border-radius:18px;overflow:hidden}
-.wl-sw-bg{position:absolute;inset:0;display:flex;justify-content:space-between;background:#e5345f;opacity:0}
+.wl-sw-bg{position:absolute;inset:0;display:flex;justify-content:space-between;background:var(--wl-del);opacity:0}
 .wl-sw.moving .wl-sw-bg,.wl-sw.open .wl-sw-bg{opacity:1}
-.wl-sw-bg button{width:84px;color:#fff;font-size:12.5px;font-weight:800}
+.wl-sw-bg button{width:84px;color:var(--wl-ink);font-size:12.5px;font-weight:800}
 .wl-item{position:relative;display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:18px;
-  background:#211a3b;border:1px solid var(--wl-line);touch-action:pan-y;transition:transform .22s cubic-bezier(.2,.8,.2,1)}
+  background:var(--wl-item);border:1px solid var(--wl-line);box-shadow:0 2px 8px var(--wl-shadow);touch-action:pan-y;transition:transform .22s cubic-bezier(.2,.8,.2,1)}
 .wl-sw.moving .wl-item{transition:none}
 .wl-tag{flex:none;width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;letter-spacing:-.02em}
 .wl-body{flex:1;min-width:0;text-align:left}
 .wl-t{font-size:15.5px;font-weight:700;letter-spacing:-.01em;line-height:1.25;overflow-wrap:anywhere}
 .wl-n{font-size:12.5px;color:var(--wl-mut);margin-top:2px;overflow-wrap:anywhere}
-.wl-p{font-size:11.5px;font-weight:700;margin-top:4px}
-.wl-ok{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;color:#120f24}
+.wl-p{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;margin-top:4px;color:var(--wl-mut)}
+.wl-p i{width:7px;height:7px;border-radius:50%}
+.wl-ok{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--wl-dim);display:flex;align-items:center;justify-content:center;color:var(--wl-acc-ink)}
 .wl-ok svg{width:15px;height:15px;opacity:0}
-.wl-item.done .wl-ok{background:var(--wl-grad);border-color:transparent}
+.wl-item.done .wl-ok{background:var(--wl-ok);border-color:transparent}
 .wl-item.done .wl-ok svg{opacity:1}
-.wl-item.done .wl-t{text-decoration:line-through;text-decoration-color:rgba(255,255,255,.4);color:var(--wl-mut)}
+.wl-item.done .wl-t{text-decoration:line-through;text-decoration-color:var(--wl-dim);color:var(--wl-mut)}
 .wl-item.done .wl-tag{opacity:.45}
 .wl-empty{text-align:center;color:var(--wl-mut);font-size:14px;line-height:1.5;padding:26px 10px;border:1.5px dashed var(--wl-line);border-radius:18px}
 .wl-sec{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:22px;padding:4px 2px;font-size:13px;font-weight:800;color:var(--wl-mut)}
 .wl-sec svg{width:15px;height:15px;transition:transform .2s}
 .wl-sec.open svg{transform:rotate(90deg)}
 .wl-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(26px + env(safe-area-inset-bottom,0px));z-index:95;
-  display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px;border-radius:999px;background:#fbf7ff;color:#120f24;font-size:13px;font-weight:700;
-  box-shadow:0 12px 30px rgba(0,0,0,.35);white-space:nowrap}
-.wl-toast button{background:#120f24;color:#fbf7ff;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:800}
-.wl button:focus-visible,.wl input:focus-visible{outline:2px solid var(--wl-sun);outline-offset:2px}
+  display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px;border-radius:999px;background:#2e2840;color:#f6f2fb;font-size:13px;font-weight:700;
+  box-shadow:0 12px 30px rgba(20,14,34,.25);white-space:nowrap}
+.wl-toast button{background:#f6f2fb;color:#2e2840;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:800}
+.wl button:focus-visible,.wl input:focus-visible{outline:2px solid var(--wl-acc);outline-offset:2px}
 `;
 
   const ICON = {
@@ -128,6 +155,7 @@ var WatchView = (function () {
     isOpen = true;
     st.edit = null; st.plat = ''; st.showDone = false;
     root = document.createElement('div'); root.className = 'wl';
+    root.setAttribute('style', themeVars(T()));
     root.innerHTML = '<div class="wl-page in" id="wlPage"></div>';
     root.addEventListener('click', e => { if (e.target === root) close(); });
     document.body.appendChild(root);
@@ -164,7 +192,7 @@ var WatchView = (function () {
         <button class="wl-back" id="wlClose">${ICON.back}Ajanda</button>
         <span class="wl-cnt" id="wlCnt"></span>
       </div>
-      <h1 class="wl-h1">İzlenecek<span>ler</span></h1>
+      <h1 class="wl-h1">İzlenecekler</h1>
       <p class="wl-sub">Ne zaman olduğu önemli değil — aklında kalsın.</p>
       <div class="wl-form">
         <input class="wl-in" id="wlTitle" placeholder="Ne izleyeceksin?" autocomplete="off" enterkeyhint="next" value="${ed ? S.escAttr(ed.title) : ''}">
@@ -193,7 +221,7 @@ var WatchView = (function () {
     return `<button class="wl-plat" data-p="${p.id}" style="${platStyle(p, p.id === st.plat)}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`;
   }
   function platStyle(p, on) {
-    return on ? `background:${p.color};color:${p.ink};box-shadow:0 6px 18px ${p.id === 'appletv' ? 'rgba(255,255,255,.18)' : S.rgba(p.color, .45)}` : '';
+    return on ? `background:${p.color};color:${p.ink};box-shadow:0 4px 12px ${S.rgba(p.color, .55)}` : '';
   }
   function paintPlat(btn, on) {
     const p = PMAP[btn.dataset.p];
@@ -244,7 +272,7 @@ var WatchView = (function () {
     el.className = 'wl-item' + (w.done ? ' done' : '');
     el.innerHTML = `<div class="wl-tag" style="background:${p.color};color:${p.ink}">${ABBR[w.plat] || '•'}</div>
       <button class="wl-body"><div class="wl-t">${esc(w.title)}</div>${w.note ? `<div class="wl-n">${esc(w.note)}</div>` : ''}
-        <div class="wl-p" style="color:${w.plat ? (w.plat === 'appletv' ? '#d9d9e3' : p.color) : 'var(--wl-dim)'}">${esc(p.name)}</div></button>
+        <div class="wl-p">${w.plat ? `<i style="background:${p.color}"></i>` : ''}${esc(p.name)}</div></button>
       <button class="wl-ok" aria-label="${w.done ? 'İzlenmedi yap' : 'İzledim'}">${ICON.check}</button>`;
     el.querySelector('.wl-ok').onclick = e => {
       e.stopPropagation();

@@ -210,12 +210,12 @@ body[data-ui="mobile"] #app{
 .mob .sw.moving .sw-fg{transition:none}
 /* İzlenecekler düğmesi: en üst satırın solunda; ajandanın başlık ve düğmelerine dokunmaz */
 .mob .wbtn{position:absolute;top:calc(6px + var(--safeT));left:18px;height:26px;display:inline-flex;align-items:center;gap:6px;
-  padding:0 10px 0 4px;border-radius:999px;background:linear-gradient(120deg,#ff4d8d,#ff8a4c 60%,#ffb238);color:#fff;
-  font-size:12px;font-weight:800;letter-spacing:-.01em;box-shadow:0 2px 10px rgba(255,77,141,.35);transition:transform .12s;z-index:2}
+  padding:0 10px 0 4px;border-radius:999px;   /* renkleri watch.js temasından gelir */
+  font-size:12px;font-weight:800;letter-spacing:-.01em;transition:transform .12s;z-index:2}
 .mob .wbtn:active{transform:scale(.94)}
-.mob .wbtn .pl{width:19px;height:19px;border-radius:999px;background:rgba(36,19,69,.85);display:flex;align-items:center;justify-content:center}
+.mob .wbtn .pl{width:19px;height:19px;border-radius:999px;display:flex;align-items:center;justify-content:center}
 .mob .wbtn svg{width:9px;height:9px;margin-left:1px}
-.mob .wbtn b{min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:rgba(36,19,69,.85);font-size:10.5px;display:flex;align-items:center;justify-content:center}
+.mob .wbtn b{min-width:17px;height:17px;padding:0 5px;border-radius:999px;font-size:10.5px;display:flex;align-items:center;justify-content:center}
 .mob .note{margin-top:9px;text-align:center;font-size:11.5px;color:var(--m4);font-weight:500;line-height:1.45}
 `;
 
