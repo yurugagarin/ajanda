@@ -28,8 +28,8 @@ body[data-ui="mobile"] #app{
 .mob input,.mob select,.mob textarea{font-family:inherit}
 .mob .tnum{font-variant-numeric:tabular-nums}
 
-.mob .ver{position:absolute;top:calc(5px + var(--safeT));right:20px;font-size:9.5px;font-weight:600;color:var(--m3);letter-spacing:.02em;pointer-events:none}
-.mob .hdr{position:relative;padding:calc(20px + var(--safeT)) 20px 8px;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex:none}
+.mob .ver{position:absolute;top:calc(12px + var(--safeT));right:20px;font-size:9.5px;font-weight:600;color:var(--m3);letter-spacing:.02em;pointer-events:none}
+.mob .hdr{position:relative;padding:calc(38px + var(--safeT)) 20px 8px;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex:none}
 .mob .kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--m4);font-weight:600;display:flex;align-items:center;gap:6px}
 .mob .kicker i{width:6px;height:6px;border-radius:999px;display:block}
 .mob .title{font-size:30px;font-weight:700;letter-spacing:-.02em;margin-top:3px;line-height:1.05;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;max-width:100%}
@@ -208,12 +208,21 @@ body[data-ui="mobile"] #app{
 .mob .sw-bg svg{width:19px;height:19px}
 .mob .sw-fg{position:relative;touch-action:pan-y;transition:transform .22s cubic-bezier(.2,.8,.2,1);will-change:transform}
 .mob .sw.moving .sw-fg{transition:none}
+/* İzlenecekler düğmesi: en üst satırın solunda; ajandanın başlık ve düğmelerine dokunmaz */
+.mob .wbtn{position:absolute;top:calc(6px + var(--safeT));left:18px;height:26px;display:inline-flex;align-items:center;gap:6px;
+  padding:0 10px 0 4px;border-radius:999px;   /* renkleri watch.js temasından gelir */
+  font-size:12px;font-weight:800;letter-spacing:-.01em;transition:transform .12s;z-index:2}
+.mob .wbtn:active{transform:scale(.94)}
+.mob .wbtn .pl{width:19px;height:19px;border-radius:999px;display:flex;align-items:center;justify-content:center}
+.mob .wbtn svg{width:9px;height:9px;margin-left:1px}
+.mob .wbtn b{min-width:17px;height:17px;padding:0 5px;border-radius:999px;font-size:10.5px;display:flex;align-items:center;justify-content:center}
 .mob .note{margin-top:9px;text-align:center;font-size:11.5px;color:var(--m4);font-weight:500;line-height:1.45}
 `;
 
   const SVG = {
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
     trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
@@ -281,6 +290,7 @@ body[data-ui="mobile"] #app{
     app.innerHTML = `
       <div class="hdr">
         <div class="ver">Sürüm ${S.VERSION} · ${S.VERSION_DATE}</div>
+        <button class="wbtn" id="mWatch" aria-label="İzlenecekler"><span class="pl">${SVG.play}</span>İzlenecekler<b id="mWatchN" hidden></b></button>
         <div style="flex:1;min-width:0">
           <div class="kicker" id="mKicker"></div>
           <button class="title" id="mTitle"></button>
@@ -319,6 +329,7 @@ body[data-ui="mobile"] #app{
       V.anim = 'zin'; render();
     };
     $('mAdd').onclick = () => openSheet(null, defaultDate());
+    $('mWatch').onclick = () => WatchView.open();
     $('mKicker').onclick = () => { if (V.level === 'gun' || V.level === 'hafta') back(); else openSearch(); };
     bindGestures();
   }
@@ -381,6 +392,8 @@ body[data-ui="mobile"] #app{
     }[V.level]);
 
     navPair(step);
+    const wn = WatchView.count(), wb = $('mWatchN');
+    wb.hidden = !wn; wb.textContent = wn > 99 ? '99+' : wn;
     const sc = $('mScroll');
     /* aynı ekran yeniden çiziliyorsa (ör. işaret, eşitleme) kaydırma yeri korunur;
        başka ekrana geçince en üste dönülür */
@@ -1211,6 +1224,7 @@ body[data-ui="mobile"] #app{
     window.addEventListener('resize', () => { if (document.body.dataset.ui === 'mobile') fitTitle(); });
     window.addEventListener('popstate', () => {
       if (document.body.dataset.ui !== 'mobile') return;
+      if (WatchView.isOpen() || WatchView.poppedRecently()) return;   /* geri tuşu İzlenecekler'i kapattı */
       if (sheetOpen) { closeSheet(); return; }
       if (V.level === 'gun' || V.level === 'hafta') back();
     });

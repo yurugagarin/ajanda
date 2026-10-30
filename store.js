@@ -6,7 +6,7 @@
 var Store = (function () {
 
   /* sürüm: her güncellemede index.html'deki ?v= ile birlikte artırın — sağ üstte görünür */
-  const VERSION = '17', VERSION_DATE = '4 Eki 2026';
+  const VERSION = '18', VERSION_DATE = '30 Eki 2026';
   const LS_DATA = 'ajanda_data_v3';
   const LS_CFG = 'ajanda_cfg_v1';
   const OLD_KEYS = ['ajanda_2026_v1', 'ajanda_2027_v1', 'ajanda_2028_v1'];
@@ -116,6 +116,7 @@ var Store = (function () {
       habitsMt: 0,
       habitLog: {},
       countdown: { v: '', mt: 0 },
+      watch: [],          /* izlenecekler listesi (ajandadan ayrı) */
       deleted: {}
     };
   }
@@ -175,6 +176,8 @@ var Store = (function () {
     if (!D.habitLog || typeof D.habitLog !== 'object') D.habitLog = {};
     if (!D.deleted || typeof D.deleted !== 'object') D.deleted = {};
     if (!D.countdown || typeof D.countdown !== 'object') D.countdown = { v: '', mt: 0 };
+    if (!Array.isArray(D.watch)) D.watch = [];
+    D.watch = D.watch.filter(w => w && w.id).map(w => Object.assign({ title: '', note: '', plat: '', done: false, mt: 1, at: w.mt || 1 }, w));
     D.events = D.events.map(e => Object.assign({ time: '', note: '', amtType: 'none', amt: 0, done: false, mt: 1 }, e));
     if (D.cv !== CAT_VERSION) migrateCats(D);
     /* varsayılan kategoriler eksikse tamamla (silinmemişse) */
@@ -291,6 +294,12 @@ var Store = (function () {
     Object.keys(out.habitLog).forEach(k => { if (!out.habitLog[k] || !out.habitLog[k].i || !out.habitLog[k].i.length) delete out.habitLog[k]; });
 
     out.countdown = ((b.countdown || {}).mt || 0) > ((a.countdown || {}).mt || 0) ? b.countdown : a.countdown;
+
+    /* izlenecekler: kayıt bazında son yazan kazanır, silinenler geri gelmez */
+    const wm = {};
+    a.watch.forEach(w => wm[w.id] = w);
+    b.watch.forEach(w => { const c = wm[w.id]; if (!c || (w.mt || 0) > (c.mt || 0)) wm[w.id] = w; });
+    out.watch = Object.keys(wm).map(k => wm[k]).filter(w => !(out.deleted[w.id] && out.deleted[w.id] >= (w.mt || 0)));
     return normalize(out);
   }
 
@@ -395,6 +404,25 @@ var Store = (function () {
       .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : byTime(a, b));
   }
   function setCountdown(v) { D.countdown = { v: v, mt: now() }; commit(); }
+
+  /* ---------- izlenecekler ---------- */
+  function addWatch(w) {
+    const t = now();
+    const it = { id: uid('w'), title: (w.title || '').trim(), note: (w.note || '').trim(), plat: w.plat || '', done: false, at: t, mt: t };
+    D.watch.push(it); commit(); return it;
+  }
+  function updateWatch(id, patch) { D.watch = D.watch.map(w => w.id === id ? Object.assign({}, w, patch, { mt: now() }) : w); commit(); }
+  function deleteWatch(id) {
+    const it = D.watch.filter(w => w.id === id)[0];
+    D.watch = D.watch.filter(w => w.id !== id);
+    D.deleted[id] = now(); commit();
+    return it;
+  }
+  function restoreWatch(it) {
+    if (!it) return;
+    delete D.deleted[it.id];
+    D.watch.push(Object.assign({}, it, { mt: now() })); commit();
+  }
 
   /* aktiviteler (yalnızca web görünümünde kullanılıyor) */
   const doneOn = k => (D.habitLog[k] && D.habitLog[k].i) || [];
@@ -692,6 +720,7 @@ var Store = (function () {
     on, emit, commit, persist,
     dkey, todayKey, shiftKey, parseKey, weekday, esc, escAttr, rgba, money, uid, pad,
     catMap, habitMap, cat, eventsByDate, eventsOn, byTime,
+    addWatch, updateWatch, deleteWatch, restoreWatch,
     addEvent, addEvents, groupCount, deleteGroup, updateEvent, toggleDone, overdue, deleteEvent, updateCat, addCat, setCountdown,
     doneOn, toggleHabit, habitStreak, updateHabit, addHabit, deleteHabit,
     totals, exportJSON, importJSON, collapse, spanLabel, catUsage, eventsInCat, deleteCat, COLOR, groupDays, toICS, downloadICS, search, canUndo, undo,
