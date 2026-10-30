@@ -72,6 +72,11 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
 .d-wd button.on{background:#6b5f4d;border-color:#6b5f4d;color:#fbf8f2}
 .d-sum{flex:1;min-width:180px;font-size:13.5px;font-weight:600;color:#5a5142}
 .d-sum span{color:#a8987c;font-weight:600}
+.d-watch{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;padding:8px 14px 8px 10px;cursor:pointer;font-family:inherit;
+  font-size:13px;font-weight:700;color:#fff;background:linear-gradient(120deg,#ff4d8d,#ff8a4c 60%,#ffb238);box-shadow:0 4px 14px rgba(255,77,141,.3)}
+.d-watch:hover{filter:brightness(1.05)}
+.d-watch span{width:22px;height:22px;border-radius:50%;background:rgba(36,19,69,.85);display:inline-flex;align-items:center;justify-content:center;font-size:10px}
+.d-watch b{background:rgba(36,19,69,.85);border-radius:999px;padding:1px 7px;font-size:11.5px}
 .d-chk{width:20px;height:20px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;border:2px solid rgba(243,236,223,.35);background:none;cursor:pointer;padding:0;color:#fff}
 .d-chk svg{width:11px;height:11px;opacity:0}
 .d-chk.on{background:#6C9E6E;border-color:#6C9E6E}
@@ -581,6 +586,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
           ${resHtml}
         </div>
         <button class="d-btn" onclick="DV.multi()" style="${V.multi ? 'background:var(--acc);border-color:var(--acc);color:#fff' : ''}">+ Çoklu gün / aralık</button>
+        <button class="d-watch" onclick="WatchView.open()" title="İzlenecekler — film, dizi, stand-up listesi"><span>▶</span>İzlenecekler${WatchView.count() ? ` <b>${WatchView.count()}</b>` : ''}</button>
         <button class="d-btn" onclick="DV.toolsToggle()" style="display:inline-flex;align-items:center;gap:7px">
           <span id="dDot" style="width:8px;height:8px;border-radius:50%;background:#a8987c"></span>Araçlar</button>
       </div>
