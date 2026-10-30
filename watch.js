@@ -39,7 +39,7 @@ var WatchView = (function () {
     elektrik: { name: 'Elektrik', bg: '#0a0e25', bg2: '#161e58', g1: '#2d2f99', g2: '#24185a', item: '#171c45', grad: ['#818cf8', '#c084fc', '#f472b6'], gradInk: '#170b2e', del: '#f43f6b' },
     sinema: { name: 'Sinema', bg: '#0e0d0d', bg2: '#1f1b19', g1: '#43301a', g2: '#331616', item: '#1d1a19', grad: ['#f43f5e', '#fb923c', '#fbbf24'], gradInk: '#220a08', del: '#f43f5e' }
   };
-  let THEME = 'mor';
+  let THEME = 'sinema';   /* seçilen tema */
   try { const q = new URLSearchParams(location.search).get('wtema'); if (q && THEMES[q]) THEME = q; } catch (e) { }
   const T = () => THEMES[THEME];
   const gradOf = t => `linear-gradient(120deg,${t.grad[0]} 0%,${t.grad[1]} 55%,${t.grad[2]} 100%)`;
