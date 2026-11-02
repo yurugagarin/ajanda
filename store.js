@@ -6,7 +6,7 @@
 var Store = (function () {
 
   /* sürüm: her güncellemede index.html'deki ?v= ve version.json ile birlikte artırın — sağ üstte görünür */
-  const VERSION = '19', VERSION_DATE = '30 Eki 2026';
+  const VERSION = '20', VERSION_DATE = '2 Kas 2026';
   const LS_DATA = 'ajanda_data_v3';
   const LS_CFG = 'ajanda_cfg_v1';
   const OLD_KEYS = ['ajanda_2026_v1', 'ajanda_2027_v1', 'ajanda_2028_v1'];
@@ -473,6 +473,35 @@ var Store = (function () {
     });
     return out;
   }
+  /* listelerde aynı kaydın ardışık günlerini tek satırda topla (ör. "zade · 8–11 Kas").
+     Aynı seri (gid) ya da aynı başlık + kategori; aralıklı tekrarlar (her ay "Kapanış")
+     ayrı satır kalır. Yalnızca verilen listedeki günler sayılır. */
+  function collapseSimilar(list) {
+    const groups = [], idx = {};
+    (list || []).forEach(e => {
+      const key = e.gid ? 'g:' + e.gid : 't:' + String(e.text || '').trim().toLocaleLowerCase('tr') + '|' + e.cat;
+      let g = idx[key];
+      if (!g) { g = idx[key] = { ev: e, days: {}, order: groups.length }; groups.push(g); }
+      (g.days[e.date] = g.days[e.date] || []).push(e);
+    });
+    const out = [];
+    groups.forEach(g => {
+      const dates = Object.keys(g.days).sort();
+      let run = [];
+      const flush = () => {
+        if (!run.length) return;
+        const evs = [].concat.apply([], run.map(d => g.days[d]));
+        const times = {}; evs.forEach(x => times[x.time || ''] = 1);
+        /* saatler farklıysa satırda saat gösterilmez */
+        const ev = Object.keys(times).length === 1 ? evs[0] : Object.assign({}, evs[0], { time: '' });
+        out.push({ ev: ev, first: run[0], last: run[run.length - 1], count: run.length, contiguous: true });
+        run = [];
+      };
+      dates.forEach(d => { if (run.length && shiftKey(run[run.length - 1], 1) !== d) flush(); run.push(d); });
+      flush();
+    });
+    return out.sort((a, b) => a.first < b.first ? -1 : a.first > b.first ? 1 : byTime(a.ev, b.ev));
+  }
   function spanLabel(it) {
     const a = parseKey(it.first), b = parseKey(it.last);
     if (it.count === 1) return a.d + ' ' + MONTHS_SHORT[a.m];
@@ -480,7 +509,8 @@ var Store = (function () {
       return a.m === b.m ? a.d + '–' + b.d + ' ' + MONTHS_SHORT[b.m]
         : a.d + ' ' + MONTHS_SHORT[a.m] + ' – ' + b.d + ' ' + MONTHS_SHORT[b.m];
     }
-    return a.d + ' ' + MONTHS_SHORT[a.m] + ' · ' + it.count + ' gün';
+    const range = a.m === b.m ? a.d + '–' + b.d + ' ' + MONTHS_SHORT[b.m] : a.d + ' ' + MONTHS_SHORT[a.m] + ' – ' + b.d + ' ' + MONTHS_SHORT[b.m];
+    return range + ' · ' + it.count + ' gün';
   }
 
   /* ---------- renk kullanımı (sık kullanılan sırası) ---------- */
@@ -723,7 +753,7 @@ var Store = (function () {
     addWatch, updateWatch, deleteWatch, restoreWatch,
     addEvent, addEvents, groupCount, deleteGroup, updateEvent, toggleDone, overdue, deleteEvent, updateCat, addCat, setCountdown,
     doneOn, toggleHabit, habitStreak, updateHabit, addHabit, deleteHabit,
-    totals, exportJSON, importJSON, collapse, spanLabel, catUsage, eventsInCat, deleteCat, COLOR, groupDays, toICS, downloadICS, search, canUndo, undo,
+    totals, exportJSON, importJSON, collapse, collapseSimilar, spanLabel, catUsage, eventsInCat, deleteCat, COLOR, groupDays, toICS, downloadICS, search, canUndo, undo,
     cfg, setCfg, sync, createGist, startAuto, setupLink, parseLink, connectFromText,
     get status() { return statusState; }
   };

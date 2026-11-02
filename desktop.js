@@ -85,7 +85,9 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
 .d-chk.lt{border-color:#cdbb9c}
 .d-chk.lt.on{border-color:#6C9E6E}
 .d-done .d-tt{text-decoration:line-through;opacity:.55}
-.d-sub{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:8px;display:flex;align-items:baseline;gap:8px}
+.d-sub{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:8px;display:flex;align-items:baseline;gap:8px;white-space:nowrap;min-width:0}
+.d-more{background:none;border:1px dashed rgba(243,236,223,.26);border-radius:9px;padding:7px 10px;color:#bcae97;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center}
+.d-more:hover{color:#f3ecdf;border-color:rgba(243,236,223,.45)}
 @media (prefers-reduced-motion:reduce){.d-app *{animation:none!important;transition:none!important}}
 `;
 
@@ -102,7 +104,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       year: new Date().getFullYear(), selected: null,
       draft: { text: '', cat: 'genel', time: '', note: '' },
       yearPick: false, setOpen: false, tools: false, catEdit: false,
-      multi: null, filter: null, q: '', qFocus: false, toast: null
+      multi: null, filter: null, q: '', qFocus: false, toast: null, more: {}
     };
   }
 
@@ -207,16 +209,24 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
         ${chk}<span style="width:3px;height:20px;border-radius:3px;background:${c.color};flex:none"></span>
         <div class="d-tt" style="flex:1;min-width:0;font-size:13px;color:#f3ecdf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${S.esc(ev.text)}
           <span style="color:#8f836f;font-weight:600">· ${S.esc(c.name)}</span></div>
-        ${right ? `<span style="font-size:11.5px;color:#bcae97;font-weight:600;white-space:nowrap">${right}</span>` : ''}</div>`;
+        ${right ? `<span style="flex:none;font-size:11.5px;color:#bcae97;font-weight:600;white-space:nowrap">${right}</span>` : ''}</div>`;
     };
     const emptyBox = t => `<div style="border:1px dashed rgba(243,236,223,.26);border-radius:9px;padding:10px;text-align:center;color:#bcae97;font-size:12.5px">${t}</div>`;
 
     const todayEvents = byDate[tKey] || [];
     const nDone = todayEvents.filter(e => e.done).length;
     let todayEvHtml = todayEvents.length ? todayEvents.map(ev => row(ev, ev.time)).join('') : emptyBox('Bugüne ait kayıt yok.');
-    const miss = S.collapse(S.overdue(7)).map(it => it.ev);
+    /* kısa liste: en çok n satır, kalanı "+N kayıt daha" ile açılır */
+    const capped = (items, n, key, fn) => {
+      const all = V.more[key], vis = all ? items : items.slice(0, n), rest = items.length - vis.length;
+      return vis.map(fn).join('') + (rest > 0 ? `<button class="d-more" onclick="DV.more('${key}')">+${rest} kayıt daha</button>`
+        : (all && items.length > n ? `<button class="d-more" onclick="DV.more('${key}')">Daha az göster</button>` : ''));
+    };
+    const whenOf = it => (it.count > 1 ? S.spanLabel(it) : shortDay(it.first)) + (it.ev.time ? ' · ' + it.ev.time : '');
+    /* yapılmadı: her satırın kendi işaret kutusu var, o yüzden gruplanmaz; yalnızca kısaltılır */
+    const miss = S.overdue(7);
     if (miss.length) todayEvHtml += `<div class="d-sub" style="color:#e09a74;margin:12px 0 0">Yapılmadı <span style="color:#8f836f;letter-spacing:1px">son 7 gün</span></div>`
-      + miss.map(ev => row(ev, shortDay(ev.date))).join('');
+      + capped(miss, 4, 'miss', ev => row(ev, shortDay(ev.date)));
 
     const tmrEvents = byDate[tmrKey] || [];
     const tmrHtml = tmrEvents.length ? tmrEvents.map(ev => row(ev, ev.time)).join('') : emptyBox('Yarın boş.');
@@ -227,30 +237,32 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
     const nEnd = S.dkey(nx.getFullYear(), nx.getMonth(), new Date(nx.getFullYear(), nx.getMonth() + 1, 0).getDate());
     const fut = S.data.events.filter(e => e.date > tmrKey && e.date <= nEnd)
       .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : S.byTime(a, b));
-    const upRow = it => row(it.ev, (it.count > 1 ? S.spanLabel(it) : shortDay(it.ev.date)) + (it.ev.time ? ' · ' + it.ev.time : ''), { noChk: true });
-    const restM = S.collapse(fut.filter(e => e.date <= mEnd)), nextM = S.collapse(fut.filter(e => e.date > mEnd));
-    const upHtml = (restM.length ? restM.map(upRow).join('') : emptyBox('Bu ay başka kayıt yok.'))
+    const upRow = it => row(it.ev, whenOf(it), { noChk: true });
+    /* aynı kaydın günleri tek satır; ay sonunu aşan seri ilk gününün ayında durur */
+    const groups = S.collapseSimilar(fut);
+    const restM = groups.filter(g => g.first <= mEnd), nextM = groups.filter(g => g.first > mEnd);
+    const upHtml = (restM.length ? capped(restM, 6, 'rest', upRow) : emptyBox('Bu ay başka kayıt yok.'))
       + `<div class="d-sub" style="color:#bcae97;margin:10px 0 0">Gelecek ay <span style="color:#8f836f;letter-spacing:1px">${S.MONTHS[nx.getMonth()]}${nx.getFullYear() !== tp.y ? ' ' + nx.getFullYear() : ''}</span></div>`
-      + (nextM.length ? nextM.map(upRow).join('') : emptyBox('Gelecek ay kayıt yok.'));
+      + (nextM.length ? capped(nextM, 4, 'next', upRow) : emptyBox('Gelecek ay kayıt yok.'));
     const tp1 = S.parseKey(tmrKey);
 
     const todayCard = `
-    <div style="background:#3a342c;border-radius:16px;padding:14px 18px;box-shadow:0 6px 18px rgba(58,52,44,.16);margin-bottom:16px;display:grid;grid-template-columns:minmax(170px,200px) 1.15fr 1fr 1fr;gap:20px;align-items:start">
+    <div style="background:#3a342c;border-radius:16px;padding:14px 18px;box-shadow:0 6px 18px rgba(58,52,44,.16);margin-bottom:16px;display:grid;grid-template-columns:minmax(150px,200px) minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start;overflow:hidden">
       <div>
         <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);font-weight:700">Bugün</div>
         <div class="fr" style="font-size:26px;line-height:1.1;font-weight:600;color:#f3ecdf;margin-top:3px">${tp.d} ${S.MONTHS[tp.m]}</div>
         <div style="font-size:12.5px;font-weight:600;color:#bcae97">${S.WD_FULL[S.weekday(tKey)]}</div>
         <button onclick="DV.open('${tKey}')" style="margin-top:10px;width:100%;background:var(--acc);color:#fff;border:none;border-radius:9px;padding:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Bugüne kayıt ekle</button>
       </div>
-      <div style="background:rgba(227,162,63,.07);box-shadow:inset 0 0 0 1px rgba(227,162,63,.3);border-radius:12px;padding:10px 10px 10px;margin:-4px 0">
+      <div style="min-width:0;background:rgba(227,162,63,.07);box-shadow:inset 0 0 0 1px rgba(227,162,63,.3);border-radius:12px;padding:10px 10px 10px;margin:-4px 0">
         <div class="d-sub" style="color:var(--gold)">Bugün <span style="color:#bcae97;letter-spacing:1px;margin-left:auto">${todayEvents.length ? nDone + '/' + todayEvents.length + ' yapıldı' : ''}</span></div>
         <div style="display:flex;flex-direction:column;gap:6px">${todayEvHtml}</div>
       </div>
-      <div>
+      <div style="min-width:0">
         <div class="d-sub" style="color:#f3ecdf">Yarın <span style="color:#8f836f;letter-spacing:1px">${tp1.d} ${S.MONTHS_SHORT[tp1.m]} ${S.WD_SHORT[S.weekday(tmrKey)]}</span></div>
         <div style="display:flex;flex-direction:column;gap:6px">${tmrHtml}</div>
       </div>
-      <div>
+      <div style="min-width:0">
         <div class="d-sub" style="color:#bcae97">Bu ay <span style="color:#8f836f;letter-spacing:1px">${S.MONTHS[tp.m]}</span></div>
         <div style="display:flex;flex-direction:column;gap:6px">${upHtml}</div>
       </div>
@@ -703,6 +715,7 @@ body[data-ui="desktop"] button:focus-visible,body[data-ui="desktop"] input:focus
       V.draft.text = ''; V.draft.note = ''; render();
     },
     done(id) { S.toggleDone(id); },
+    more(key) { V.more[key] = !V.more[key]; render(); },
     del(id) { S.deleteEvent(id); render(); toast('Kayıt silindi', true); },
     delGroup(gid) { const n = S.groupCount(gid); S.deleteGroup(gid); render(); toast(n + ' gün silindi', true); },
     undo() { const n = S.undo(); V.toast = null; render(); if (n) toast(n + ' kayıt geri alındı'); },
